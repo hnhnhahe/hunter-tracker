@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.12</title>
+<title>獵人追蹤戰情室 V4.15</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -357,7 +357,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.12</span>
+        <span class="header-ver">V4.15</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -372,6 +372,7 @@ input[type=file]::file-selector-button {
     <div id="userBtns"></div>
     <button class="user-add" onclick="addUser()">＋ 新增帳戶</button>
     <button class="user-add" onclick="openBackupModal()" style="margin-left:6px">💾 備份/還原</button>
+    <button class="user-add" onclick="clearAllData()" style="margin-left:6px;color:#ef4444;border-color:#ef4444">🗑 清除全部</button>
     <span class="user-label" style="margin-left:auto" id="lastSaved"></span>
 </div>
 
@@ -749,13 +750,19 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.12 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.15 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
 <script>
 // ══════════════════════════════════════════════════════
-//  COLUMN DEFINITIONS
+//  PROXY 設定 — 使用自己的 Cloudflare Worker
+// ══════════════════════════════════════════════════════
+const PROXY = 'https://yahoo-proxy.hnhnhahe.workers.dev';
+
+function proxyUrl(url) {
+    return `${PROXY}?url=${encodeURIComponent(url)}`;
+}
 //  key, label, align, sortable, frozen(Symbol only)
 // ══════════════════════════════════════════════════════
 const COL_DEFS = [
@@ -836,15 +843,35 @@ function loadCurrentUser() {
     } else {
         inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; initialPricesSnapshot={};
     }
-    // 恢復交易紀錄狀態顯示
-    if (txnData.length) {
-        const start = txnData[0]?.date || '—';
-        const end   = txnData[txnData.length-1]?.date || '—';
-        const statusEl = document.getElementById('txnStatus');
-        if (statusEl) statusEl.textContent = `已載入 ${txnData.length} 筆（${start} ~ ${end}）`;
-        const btn = document.getElementById('buildSnapshotBtn');
-        if (btn) btn.style.display = '';
+    // 同步所有 UI 狀態
+    const txnStatusEl = document.getElementById('txnStatus');
+    const buildBtn    = document.getElementById('buildSnapshotBtn');
+    const diagBar     = document.getElementById('diagBar');
+    const invFile     = document.getElementById('inventoryFile');
+    const stmFile     = document.getElementById('statementFile');
+    const txnFile     = document.getElementById('txnFile');
+
+    // 清空檔案選擇器顯示
+    if (invFile) invFile.value = '';
+    if (stmFile) stmFile.value = '';
+    if (txnFile) txnFile.value = '';
+
+    // 交易紀錄狀態
+    if (txnStatusEl) {
+        if (txnData.length) {
+            const start = txnData[0]?.date || '—';
+            const end   = txnData[txnData.length-1]?.date || '—';
+            txnStatusEl.textContent = `已載入 ${txnData.length} 筆（${start} ~ ${end}）`;
+            if (buildBtn) buildBtn.style.display = '';
+        } else {
+            txnStatusEl.textContent = '';
+            if (buildBtn) buildBtn.style.display = 'none';
+        }
     }
+
+    // Diag Bar
+    if (diagBar) diagBar.innerHTML = `<span class="diag-tag diag-info">等待匯入...</span>`;
+
     refreshKPI();
     selfCheck();
     updateUnrealizedKPI();
@@ -1122,19 +1149,16 @@ async function refreshPrices() {
     let fetched=0;
     try {
         const url   = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=regularMarketPrice,symbol`;
-        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const resp  = await fetch(proxy, {signal:AbortSignal.timeout(12000)});
-        const outer = await resp.json();
-        const body  = JSON.parse(outer.contents);
+        const resp  = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(12000)});
+        const body  = await resp.json();
         (body?.quoteResponse?.result||[]).forEach(q=>{ if(q.regularMarketPrice){prices[q.symbol]=q.regularMarketPrice;fetched++;} });
     } catch(e) {
         for (const sym of syms) {
             try {
                 const url  =`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-                const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                const resp =await fetch(proxy,{signal:AbortSignal.timeout(5000)});
+                const resp =await fetch(proxyUrl(url),{signal:AbortSignal.timeout(5000)});
                 const d    =await resp.json();
-                const p    =JSON.parse(d.contents)?.chart?.result?.[0]?.meta?.regularMarketPrice;
+                const p    =d?.chart?.result?.[0]?.meta?.regularMarketPrice;
                 if(p){prices[sym]=p;fetched++;}
             } catch(e2){}
             await new Promise(r=>setTimeout(r,180));
@@ -1394,10 +1418,8 @@ async function buildSnapshotsFromTxn() {
         statusEl.textContent = `抓取歷史股價 ${i+1}/${symsArr.length}：${sym}`;
         try {
             const url   = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=${range}`;
-            const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const resp  = await fetch(proxy, {signal:AbortSignal.timeout(10000)});
-            const outer = await resp.json();
-            const body  = JSON.parse(outer.contents);
+            const resp  = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(15000)});
+            const body  = await resp.json();
             const result = body?.chart?.result?.[0];
             if (!result) continue;
             const timestamps = result.timestamp || [];
@@ -1605,20 +1627,17 @@ async function fetchQuotes(symbols) {
     const fields='regularMarketPrice,regularMarketChangePercent,regularMarketChange,fiftyTwoWeekHigh,fiftyTwoWeekLow,trailingPE,epsTrailingTwelveMonths,marketCap,regularMarketVolume,shortName';
     try {
         const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=${fields}`;
-        const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const resp=await fetch(proxy,{signal:AbortSignal.timeout(12000)});
-        const outer=await resp.json();
-        const body=JSON.parse(outer.contents);
+        const resp=await fetch(proxyUrl(url),{signal:AbortSignal.timeout(12000)});
+        const body=await resp.json();
         (body?.quoteResponse?.result||[]).forEach(q=>{result[q.symbol]=q;});
         if(Object.keys(result).length>0) return result;
     } catch(e){}
     for(const sym of syms){
         try{
             const url=`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-            const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const r=await fetch(proxy,{signal:AbortSignal.timeout(5000)});
+            const r=await fetch(proxyUrl(url),{signal:AbortSignal.timeout(5000)});
             const d=await r.json();
-            const meta=JSON.parse(d.contents)?.chart?.result?.[0]?.meta;
+            const meta=d?.chart?.result?.[0]?.meta;
             if(meta) result[sym]={symbol:sym,regularMarketPrice:meta.regularMarketPrice,regularMarketChangePercent:meta.regularMarketChangePercent||0,regularMarketChange:0,fiftyTwoWeekHigh:meta.fiftyTwoWeekHigh,fiftyTwoWeekLow:meta.fiftyTwoWeekLow};
         }catch(e2){}
         await new Promise(r=>setTimeout(r,160));
@@ -2283,6 +2302,29 @@ updateFooterTime(); setInterval(updateFooterTime,1000);
 // ══════════════════════════════════════════════════════
 //  BACKUP / RESTORE
 // ══════════════════════════════════════════════════════
+function clearAllData() {
+    if (!confirm('確定清除所有資料？\n\n這會刪除所有帳戶的持股、對帳單、快照等全部資料。\n請確認已備份後再執行。')) return;
+    // 清除所有 hunter_ 開頭的 localStorage key
+    Object.keys(localStorage)
+        .filter(k => k.startsWith('hunter_'))
+        .forEach(k => localStorage.removeItem(k));
+    // 重置所有狀態
+    users = ['我的帳戶'];
+    activeUser = '我的帳戶';
+    inventory = []; stats = {}; prices = {}; rawTrades = [];
+    txnData = []; posSnapshots = []; currentCash = 0;
+    initialPricesSnapshot = {};
+    saveUsers();
+    renderUserBtns();
+    refreshKPI();
+    selfCheck();
+    render();
+    renderTrend();
+    document.getElementById('lastSaved').textContent = '';
+    document.getElementById('diagBar').innerHTML = '<span class="diag-tag diag-info">已清除全部資料</span>';
+    alert('已清除完成，請重新匯入資料或還原備份。');
+}
+
 function openBackupModal() {
     try {
         const list = document.getElementById('backupUserList');
@@ -2315,7 +2357,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.12',
+        version: 'V4.15',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
