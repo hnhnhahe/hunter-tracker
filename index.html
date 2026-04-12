@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.9</title>
+<title>獵人追蹤戰情室 V4.11</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -357,7 +357,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.9</span>
+        <span class="header-ver">V4.11</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -371,6 +371,7 @@ input[type=file]::file-selector-button {
     <span class="user-label">帳戶：</span>
     <div id="userBtns"></div>
     <button class="user-add" onclick="addUser()">＋ 新增帳戶</button>
+    <button class="user-add" onclick="openBackupModal()" style="margin-left:6px">💾 備份/還原</button>
     <span class="user-label" style="margin-left:auto" id="lastSaved"></span>
 </div>
 
@@ -428,11 +429,15 @@ input[type=file]::file-selector-button {
             <div class="two-col section-gap">
                 <div>
                     <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">① 初始持股 — Schwab Positions CSV 或自製 CSV（Symbol/Shares/Cost）</div>
-                    <input type="file" id="inventoryFile" accept=".csv,.xlsx">
+                    <div class="flex-row">
+                        <input type="file" id="inventoryFile" accept=".csv,.xlsx" onchange="handleInventoryFile(this)">
+                    </div>
                 </div>
                 <div>
                     <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">② 已實現損益 — Schwab GainLoss_Realized_Details_xxxx.csv</div>
-                    <input type="file" id="statementFile" accept=".csv">
+                    <div class="flex-row">
+                        <input type="file" id="statementFile" accept=".csv" onchange="handleStatementFile(this)">
+                    </div>
                 </div>
             </div>
             <div style="margin-bottom:14px">
@@ -440,7 +445,7 @@ input[type=file]::file-selector-button {
                     <span id="txnStatus" style="font-weight:400;color:var(--text3);margin-left:8px"></span>
                 </div>
                 <div class="flex-row">
-                    <input type="file" id="txnFile" accept=".csv">
+                    <input type="file" id="txnFile" accept=".csv" onchange="handleTxnFile(this)">
                     <button class="btn btn-outline btn-sm" onclick="buildSnapshotsFromTxn()" id="buildSnapshotBtn" style="display:none">📈 重建歷史快照</button>
                 </div>
             </div>
@@ -744,7 +749,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.9 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.11 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -927,9 +932,10 @@ function downloadCSV(content, filename) {
 // ══════════════════════════════════════════════════════
 //  INVENTORY IMPORT
 // ══════════════════════════════════════════════════════
-document.getElementById('inventoryFile').addEventListener('change', function(e) {
-    const file = e.target.files[0]; if (!file) return;
+function handleInventoryFile(input) {
+    const file = input.files[0]; if (!file) return;
     if (typeof Papa === 'undefined') { alert('PapaParse 套件未載入，請檢查網路連線後重新整理頁面'); return; }
+    addDiagMsg('📂 讀取中...', 'diag-info');
     Papa.parse(file, {
         skipEmptyLines: false,
         complete: function(results) {
@@ -945,7 +951,8 @@ document.getElementById('inventoryFile').addEventListener('change', function(e) 
         },
         error: function(err) { addDiagMsg('CSV 解析失敗: '+err.message, 'diag-err'); }
     });
-});
+}
+document.getElementById('inventoryFile').addEventListener('change', function(e) { handleInventoryFile(this); });
 
 function parseSimpleInventory(rows) {
     let hi = -1;
@@ -1031,9 +1038,10 @@ function pcn(raw) {
 // ══════════════════════════════════════════════════════
 //  STATEMENT IMPORT
 // ══════════════════════════════════════════════════════
-document.getElementById('statementFile').addEventListener('change', function(e) {
-    const file = e.target.files[0]; if (!file) return;
+function handleStatementFile(input) {
+    const file = input.files[0]; if (!file) return;
     if (typeof Papa === 'undefined') { alert('PapaParse 套件未載入，請重新整理頁面'); return; }
+    addDiagMsg('📂 讀取對帳單中...', 'diag-info');
     Papa.parse(file, {
         skipEmptyLines: false,
         complete: function(results) {
@@ -1060,7 +1068,8 @@ document.getElementById('statementFile').addEventListener('change', function(e) 
         },
         error: e => addDiagMsg('CSV解析失敗: '+e.message, 'diag-err')
     });
-});
+}
+document.getElementById('statementFile').addEventListener('change', function(e) { handleStatementFile(this); });
 
 function pgl(raw) {
     if (!raw&&raw!==0) return 0;
@@ -1224,9 +1233,10 @@ function buildDailyCash() {
 // ══════════════════════════════════════════════════════
 let txnData = [];  // 解析後的原始交易記錄
 
-document.getElementById('txnFile').addEventListener('change', function(e) {
-    const file = e.target.files[0]; if (!file) return;
+function handleTxnFile(input) {
+    const file = input.files[0]; if (!file) return;
     if (typeof Papa === 'undefined') { alert('PapaParse 套件未載入，請重新整理頁面'); return; }
+    addDiagMsg('📂 讀取交易紀錄中...', 'diag-info');
     Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -1264,7 +1274,8 @@ document.getElementById('txnFile').addEventListener('change', function(e) {
         },
         error: e => addDiagMsg('交易紀錄解析失敗: '+e.message, 'diag-err')
     });
-});
+}
+document.getElementById('txnFile').addEventListener('change', function(e) { handleTxnFile(this); });
 
 // MM/DD/YYYY → YYYY-MM-DD
 function parseSwabDate(raw) {
@@ -2273,17 +2284,23 @@ updateFooterTime(); setInterval(updateFooterTime,1000);
 //  BACKUP / RESTORE
 // ══════════════════════════════════════════════════════
 function openBackupModal() {
-    // 建立帳戶勾選清單
-    const list = document.getElementById('backupUserList');
-    list.innerHTML = users.map(u => {
-        const hasData = !!localStorage.getItem(`hunter_${u}_data`);
-        return `<div class="backup-item">
-            <input type="checkbox" id="bk-${u}" value="${u}" ${hasData?'checked':''} ${!hasData?'disabled':''}>
-            <label for="bk-${u}" style="flex:1">${u}</label>
-            <span style="font-size:.72rem;color:var(--text3)">${hasData?'有資料':'無資料'}</span>
-        </div>`;
-    }).join('');
-    document.getElementById('backupModal').style.display='flex';
+    try {
+        const list = document.getElementById('backupUserList');
+        if (!list) { alert('找不到 backupUserList 元素'); return; }
+        list.innerHTML = users.length ? users.map(u => {
+            const hasData = !!localStorage.getItem(`hunter_${u}_data`);
+            return `<div class="backup-item">
+                <input type="checkbox" id="bk-${u}" value="${u}" ${hasData?'checked':''} ${!hasData?'disabled':''}>
+                <label for="bk-${u}" style="flex:1">${u}</label>
+                <span style="font-size:.72rem;color:var(--text3)">${hasData?'有資料':'無資料'}</span>
+            </div>`;
+        }).join('') : '<div style="color:var(--text3);font-size:.82rem;padding:8px">尚無帳戶資料</div>';
+        const modal = document.getElementById('backupModal');
+        if (!modal) { alert('找不到 backupModal 元素'); return; }
+        modal.style.display = 'flex';
+    } catch(e) {
+        alert('開啟備份視窗失敗: ' + e.message);
+    }
 }
 
 function closeBackupModal() {
@@ -2298,7 +2315,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.9',
+        version: 'V4.11',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
