@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.15</title>
+<title>獵人追蹤戰情室 V4.16</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -357,7 +357,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.15</span>
+        <span class="header-ver">V4.16</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -750,7 +750,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.15 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.16 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1387,7 +1387,10 @@ async function buildSnapshotsFromTxn() {
     btn.disabled = true;
     btn.textContent = '重建中...';
 
-    // 1. 重建每日持倉
+    // 1. 清除舊的回填快照（保留手動記錄的）
+    posSnapshots = posSnapshots.filter(s => !s.backfilled);
+
+    // 2. 重建每日持倉
     statusEl.textContent = '重建每日持倉狀態...';
     const dailyHoldings = buildDailyHoldings();
     const allTxnDates = Object.keys(dailyHoldings).sort();
@@ -2035,13 +2038,16 @@ function renderSnapshotChart() {
             ctx.fillStyle = isBF ? 'rgba(21,128,61,0.35)' : '#15803d';
             ctx.beginPath(); ctx.arc(toX(i), toY(s.totalAssets), r1, 0, Math.PI*2); ctx.fill();
         }
-        // 最後一點標數值
+        // 最後一點標數值（靠左顯示避免超出邊界）
         if (i === posSnapshots.length-1) {
-            ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
-            ctx.fillStyle='#2563eb'; ctx.fillText(fmtUSD(s.totalMV), toX(i)+8, toY(s.totalMV)+4);
-            ctx.fillStyle='#d97706'; ctx.fillText(fmtUSD(s.totalCB), toX(i)+8, toY(s.totalCB)+4);
+            ctx.font='bold 11px sans-serif';
+            const labelX = toX(i) > W - 80 ? toX(i) - 8 : toX(i) + 8;
+            const align = toX(i) > W - 80 ? 'right' : 'left';
+            ctx.textAlign = align;
+            ctx.fillStyle='#2563eb'; ctx.fillText(fmtUSD(s.totalMV), labelX, toY(s.totalMV)+4);
+            ctx.fillStyle='#d97706'; ctx.fillText(fmtUSD(s.totalCB), labelX, toY(s.totalCB)+4);
             if (hasCash && s.totalAssets) {
-                ctx.fillStyle='#15803d'; ctx.fillText(fmtUSD(s.totalAssets), toX(i)+8, toY(s.totalAssets)+4);
+                ctx.fillStyle='#15803d'; ctx.fillText(fmtUSD(s.totalAssets), labelX, toY(s.totalAssets)+4);
             }
         }
     });
@@ -2304,7 +2310,6 @@ updateFooterTime(); setInterval(updateFooterTime,1000);
 // ══════════════════════════════════════════════════════
 function clearAllData() {
     if (!confirm('確定清除所有資料？\n\n這會刪除所有帳戶的持股、對帳單、快照等全部資料。\n請確認已備份後再執行。')) return;
-    // 清除所有 hunter_ 開頭的 localStorage key
     Object.keys(localStorage)
         .filter(k => k.startsWith('hunter_'))
         .forEach(k => localStorage.removeItem(k));
@@ -2316,7 +2321,21 @@ function clearAllData() {
     initialPricesSnapshot = {};
     saveUsers();
     renderUserBtns();
-    refreshKPI();
+    // 清除 KPI 顯示
+    ['kpiRealized','kpiAvgOutput','kpiUnrealized','kpiMarketValue','kpiDays'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = id === 'kpiDays' ? '0' : '$0';
+    });
+    document.getElementById('kpiUnrealizedSub').textContent = '需更新股價';
+    document.getElementById('kpiMarketSub').textContent = '—';
+    document.getElementById('kpiRealizedSub').textContent = '—';
+    // 清除驗證欄位
+    ['v-schwabMV','v-schwabCash','v-schwabTotal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const vr = document.getElementById('verifyResult');
+    if (vr) vr.innerHTML = '';
     selfCheck();
     render();
     renderTrend();
@@ -2357,7 +2376,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.15',
+        version: 'V4.16',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
