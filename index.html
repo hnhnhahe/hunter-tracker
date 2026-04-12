@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.6</title>
+<title>獵人追蹤戰情室 V4.8</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <style>
@@ -342,7 +342,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.6</span>
+        <span class="header-ver">V4.8</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -418,6 +418,15 @@ input[type=file]::file-selector-button {
                 <div>
                     <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">② 已實現損益 — Schwab GainLoss_Realized_Details_xxxx.csv</div>
                     <input type="file" id="statementFile" accept=".csv">
+                </div>
+            </div>
+            <div style="margin-bottom:14px">
+                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">③ 交易紀錄 — Schwab Transactions CSV（用於重建歷史持倉快照）
+                    <span id="txnStatus" style="font-weight:400;color:var(--text3);margin-left:8px"></span>
+                </div>
+                <div class="flex-row">
+                    <input type="file" id="txnFile" accept=".csv">
+                    <button class="btn btn-outline btn-sm" onclick="buildSnapshotsFromTxn()" id="buildSnapshotBtn" style="display:none">📈 重建歷史快照</button>
                 </div>
             </div>
             <div class="diag-bar" id="diagBar">
@@ -645,9 +654,9 @@ input[type=file]::file-selector-button {
 
     <div class="card section-gap">
         <div class="card-header">
-            <div class="card-title">💰 市值 vs 成本基礎趨勢</div>
+            <div class="card-title">💰 資產趨勢（持股市值 + 現金 + 成本基礎）</div>
             <div class="flex-row">
-                <span style="font-size:.72rem;color:var(--text3)">每次匯入 Positions CSV 自動記錄一個快照</span>
+                <span style="font-size:.72rem;color:var(--text3)">每次匯入 Positions CSV 或更新股價自動記錄</span>
                 <button class="btn btn-danger btn-sm" onclick="clearSnapshots()">清除快照</button>
             </div>
         </div>
@@ -655,6 +664,35 @@ input[type=file]::file-selector-button {
             <canvas id="snapshotChart" class="trend-canvas" style="height:260px"></canvas>
             <div class="chart-legend" id="snapshotLegend"></div>
             <div id="snapshotTable" style="margin-top:12px"></div>
+        </div>
+    </div>
+
+    <!-- 驗證面板 -->
+    <div class="card section-gap" id="verifyPanel">
+        <div class="card-header collapse-toggle" onclick="togglePanel('verifyPanel')">
+            <div class="card-title">✅ 數字驗證面板</div>
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body collapsible-body">
+            <div style="font-size:.78rem;color:var(--text2);margin-bottom:12px">
+                對照 Schwab 帳戶頁面的數字，確認系統計算正確性。
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+                <div class="filter-block">
+                    <div class="filter-label">Schwab 持股市值 ($)</div>
+                    <input class="filter-input input" id="v-schwabMV" type="number" placeholder="輸入 Schwab 數字" style="width:100%">
+                </div>
+                <div class="filter-block">
+                    <div class="filter-label">Schwab 現金餘額 ($)</div>
+                    <input class="filter-input input" id="v-schwabCash" type="number" placeholder="輸入 Schwab 數字" style="width:100%">
+                </div>
+                <div class="filter-block">
+                    <div class="filter-label">Schwab 總資產 ($)</div>
+                    <input class="filter-input input" id="v-schwabTotal" type="number" placeholder="輸入 Schwab 數字" style="width:100%">
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="runVerify()">🔍 執行驗證</button>
+            <div id="verifyResult" style="margin-top:12px"></div>
         </div>
     </div>
 
@@ -691,7 +729,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.6 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.8 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -725,9 +763,11 @@ let users       = [];
 let inventory   = [];
 let stats       = {};
 let prices      = {};
-let rawTrades   = [];   // 原始交易明細 for 趨勢圖
+let rawTrades   = [];
+let txnData     = [];   // Schwab Transaction CSV 原始交易記錄
 let initialPricesSnapshot = {};
-let posSnapshots = [];  // 持倉快照 [{date, totalMV, totalCB}] for 市值/成本趨勢圖
+let posSnapshots = [];  // [{date, totalMV, totalCB, totalCash, totalAssets}]
+let currentCash  = 0;   // 今天 Positions CSV 裡的現金餘額
 let sortCol = 'dailyOut', sortDir = 'desc';
 
 // 雷達
@@ -752,7 +792,7 @@ function saveUsers() {
 
 function saveCurrentUser() {
     if (!activeUser) return;
-    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots };
+    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash };
     localStorage.setItem(`hunter_${activeUser}_data`, JSON.stringify(data));
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     document.getElementById('lastSaved').textContent = `已存檔 ${now}`;
@@ -769,10 +809,21 @@ function loadCurrentUser() {
             prices      = d.prices      || {};
             rawTrades   = d.rawTrades   || [];
             posSnapshots = d.posSnapshots || [];
+            txnData     = d.txnData     || [];
+            currentCash = d.currentCash || 0;
             initialPricesSnapshot = d.initialPricesSnapshot || {};
-        } catch(e) { inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; }
+        } catch(e) { inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; }
     } else {
-        inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; initialPricesSnapshot={};
+        inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; initialPricesSnapshot={};
+    }
+    // 恢復交易紀錄狀態顯示
+    if (txnData.length) {
+        const start = txnData[0]?.date || '—';
+        const end   = txnData[txnData.length-1]?.date || '—';
+        const statusEl = document.getElementById('txnStatus');
+        if (statusEl) statusEl.textContent = `已載入 ${txnData.length} 筆（${start} ~ ${end}）`;
+        const btn = document.getElementById('buildSnapshotBtn');
+        if (btn) btn.style.display = '';
     }
     refreshKPI();
     selfCheck();
@@ -907,35 +958,47 @@ function parseSchwabPositions(rows) {
     const col = n => headers.findIndex(h=>h===n);
     const si=col('Symbol'), qi=col('Qty (Quantity)'), csi=col('Cost/Share'), pi=col('Price');
     const cbi=col('Cost Basis');  // 部分帳戶格式無 Cost/Share，改用 Cost Basis ÷ Qty
-    const skipS = new Set(['--','cash','positions total']);
-    const skipC = ['Cash &','Positions Total'];
+    const skipS = new Set(['--','positions total']);
+    const skipC = ['Positions Total'];
     inventory = []; const initP = {};
+    let parsedCash = 0;
+
     for (let i=hi+1; i<rows.length; i++) {
         const row = rows[i]; if (!row||row.length<3) continue;
         const sym = (row[si]||'').toString().trim().toUpperCase();
         if (!sym) continue;
-        if (skipS.has(sym.toLowerCase())) continue;
+
+        // 抓現金行
+        if (row[0] && row[0].toString().includes('Cash &')) {
+            const mktValIdx2 = col('Mkt Val (Market Value)');
+            if (mktValIdx2 >= 0) parsedCash = pcn(row[mktValIdx2]);
+            continue;
+        }
         if (skipC.some(s=>row[0]&&row[0].toString().includes(s))) continue;
+        if (skipS.has(sym.toLowerCase())) continue;
+        if (sym === '--') continue;
+
         const shares = parseFloat((row[qi]||'0').toString().replace(/[,$"]/g,''))||0;
-        // 均成本：優先用 Cost/Share；若無此欄則用 Cost Basis ÷ Qty 反推
         let cost = csi >= 0 ? pcn(row[csi]) : 0;
         if (!cost && cbi >= 0) {
             const cb = pcn(row[cbi]);
             cost = (shares > 0) ? cb / shares : 0;
         }
-        const price  = pcn(row[pi]);
+        const price = pcn(row[pi]);
         if (shares===0&&cost===0) continue;
         inventory.push({Symbol:sym, Shares:shares, Cost:cost});
         if (price>0) initP[sym]=price;
     }
+
+    // 更新現金
+    if (parsedCash >= 0) currentCash = parsedCash;
     Object.entries(initP).forEach(([s,p])=>{ prices[s]=p; initialPricesSnapshot[s]=p; });
 
-    // 匯入時也記錄快照（用 CSV 裡的初始股價計算）
     const snapMV = inventory.reduce((sum,it)=>{ const p=initP[it.Symbol]; return p?sum+p*it.Shares:sum; },0);
     const snapCB = inventory.reduce((sum,it)=>sum+it.Cost*it.Shares, 0);
-    recordSnapshot(snapMV, snapCB);
+    recordSnapshot(snapMV, snapCB, currentCash);
 
-    document.getElementById('diagBar').innerHTML = `<span class="diag-tag diag-ok">✓ Schwab Positions｜${inventory.length} 筆持股，${Object.keys(initP).length} 筆初始股價，快照已記錄（共 ${posSnapshots.length} 筆）</span>`;
+    document.getElementById('diagBar').innerHTML = `<span class="diag-tag diag-ok">✓ Schwab Positions｜${inventory.length} 筆持股，現金 ${fmtUSD(currentCash)}，快照已記錄（共 ${posSnapshots.length} 筆）</span>`;
     updateUnrealizedKPI(); saveCurrentUser(); selfCheck(); render();
 }
 
@@ -1054,78 +1117,7 @@ async function refreshPrices() {
     tm.textContent=`${now} ｜ API ${fetched}/${syms.length}${fb?` ｜ ${fb}筆快取`:''}`;
     src.textContent='Yahoo Finance (15min delay)';
     updateUnrealizedKPI();
-
-    // 歷史快照回填（補齊缺漏的交易日）
-    await backfillHistoricalSnapshots(syms, tm);
-
     saveCurrentUser(); render();
-}
-
-// ══════════════════════════════════════════════════════
-//  歷史快照回填
-//  - 抓每個標的過去一年歷史日收盤價
-//  - 對每個缺漏的交易日計算總市值（用現在的持股數回推）
-//  - 成本基礎用現在的均成本回推（已知限制：歷史加減倉不會反映）
-// ══════════════════════════════════════════════════════
-async function backfillHistoricalSnapshots(syms, statusEl) {
-    // 找出目前已有的快照日期
-    const existingDates = new Set(posSnapshots.map(s=>s.date));
-    const today = new Date().toISOString().slice(0,10);
-
-    // 建立「每個標的的歷史價格表」{ SYM: { '2025-04-12': 123.45, ... } }
-    statusEl.textContent = '回填歷史快照中...';
-    const histPrices = {};
-
-    for (const sym of syms) {
-        try {
-            const url   = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y`;
-            const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const resp  = await fetch(proxy, {signal:AbortSignal.timeout(8000)});
-            const outer = await resp.json();
-            const body  = JSON.parse(outer.contents);
-            const result = body?.chart?.result?.[0];
-            if (!result) continue;
-            const timestamps = result.timestamp || [];
-            const closes     = result.indicators?.quote?.[0]?.close || [];
-            histPrices[sym] = {};
-            timestamps.forEach((ts, i) => {
-                if (closes[i]) {
-                    const d = new Date(ts * 1000).toISOString().slice(0,10);
-                    histPrices[sym][d] = closes[i];
-                }
-            });
-        } catch(e) {}
-        await new Promise(r=>setTimeout(r,200));
-    }
-
-    // 收集所有歷史日期（所有標的的聯集）
-    const allDates = new Set();
-    Object.values(histPrices).forEach(dp => Object.keys(dp).forEach(d => allDates.add(d)));
-
-    // 對每個缺漏的日期，計算總市值和成本基礎
-    let filled = 0;
-    [...allDates].filter(d => !existingDates.has(d) && d <= today).sort().forEach(date => {
-        let totalMV = 0, totalCB = 0, covered = 0;
-        inventory.forEach(item => {
-            const p = histPrices[item.Symbol]?.[date];
-            if (p === undefined) return;
-            const sh = parseFloat(item.Shares), co = parseFloat(item.Cost);
-            totalMV += p * sh;
-            totalCB += co * sh;
-            covered++;
-        });
-        // 只有當所有標的都有歷史價格時才記錄（避免部分缺資料導致數字偏低）
-        if (covered >= inventory.length * 0.8 && totalMV > 0) {
-            posSnapshots.push({ date, totalMV, totalCB, backfilled: true });
-            filled++;
-        }
-    });
-
-    if (filled > 0) {
-        posSnapshots.sort((a,b)=>a.date.localeCompare(b.date));
-        const nowStr = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-        statusEl.textContent = `${nowStr} ｜ 即時 ${syms.length} 筆 ｜ 回填歷史 ${filled} 天`;
-    }
 }
 
 function updateUnrealizedKPI() {
@@ -1142,18 +1134,310 @@ function updateUnrealizedKPI() {
         setKPI('kpiMarketValue', fmtUSD(tm), 'blue');
         document.getElementById('kpiMarketSub').innerText='成本 '+fmtUSD(tc);
         // 股價更新後自動記錄今天快照
-        recordSnapshot(tm, tc);
+        recordSnapshot(tm, tc, currentCash);
     }
 }
 
 // ── 記錄持倉快照（同一天覆蓋，不同天新增）──
-function recordSnapshot(totalMV, totalCB) {
-    if (!totalMV || !totalCB) return;
+function recordSnapshot(totalMV, totalCB, totalCash) {
+    if (!totalMV && !totalCB) return;
     const today = new Date().toISOString().slice(0,10);
-    const snap = { date:today, totalMV, totalCB };
+    const cash = (totalCash !== undefined) ? totalCash : currentCash;
+    const snap = { date:today, totalMV, totalCB, totalCash:cash, totalAssets:totalMV+cash };
     const existIdx = posSnapshots.findIndex(s=>s.date===today);
     if (existIdx>=0) posSnapshots[existIdx]=snap;
     else { posSnapshots.push(snap); posSnapshots.sort((a,b)=>a.date.localeCompare(b.date)); }
+}
+
+// ── 從 Transaction CSV 計算每日現金餘額（從今天往回推）──
+function buildDailyCash() {
+    if (!txnData.length) return {};
+
+    // 現金流水 Action 定義
+    // 從今天往回推：遇到「現金流入事件」就減回去，遇到「現金流出事件」就加回去
+    const cashFlowActions = {
+        'Buy':              r => -(r.qty * r.price),   // 買入花現金（往回加回來）
+        'Sell':             r => r.qty * r.price,       // 賣出收現金（往回減掉）
+        'Reinvest Shares':  r => -(r.qty * r.price),   // 股息再投入花現金
+        'Wire Received':    r => r.amount,              // 入金
+        'Cash Dividend':    r => r.amount,
+        'Qual Div Reinvest':r => r.amount,
+        'Bond Interest':    r => r.amount,
+        'NRA Tax Adj':      r => r.amount,
+        'Journal':          r => r.amount,
+    };
+
+    // 按日期分組
+    const byDate = {};
+    txnData.forEach(t => {
+        if (!byDate[t.date]) byDate[t.date] = [];
+        byDate[t.date].push(t);
+    });
+
+    const allDates = Object.keys(byDate).sort().reverse(); // 由新到舊
+    const dailyCash = {};
+    let cash = currentCash; // 從今天的現金往回推
+
+    const today = new Date().toISOString().slice(0,10);
+    dailyCash[today] = cash;
+
+    allDates.forEach(date => {
+        const txns = byDate[date];
+        // 倒推：把當天的現金流反向
+        txns.forEach(t => {
+            const fn = cashFlowActions[t.action];
+            if (fn) cash -= fn(t); // 反向
+        });
+        dailyCash[date] = Math.max(0, cash);
+    });
+
+    return dailyCash;
+}
+
+// ══════════════════════════════════════════════════════
+//  TRANSACTION CSV 匯入 + 歷史快照重建
+//  來源：Schwab Transactions CSV
+//  欄位：Date, Action, Symbol, Quantity, Price, Amount
+//  處理的 Action：Buy, Sell, Reinvest Shares, Journaled Shares（股票分割）
+//  忽略：Dividend, Wire, NRA Tax Adj, Journal, Bond Interest 等
+// ══════════════════════════════════════════════════════
+let txnData = [];  // 解析後的原始交易記錄
+
+document.getElementById('txnFile').addEventListener('change', function(e) {
+    const file = e.target.files[0]; if (!file) return;
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            const rows = results.data;
+            if (!rows.length) { addDiagMsg('交易紀錄：無資料', 'diag-err'); return; }
+
+            // 保留所有有現金影響的 Action
+            const validActions = new Set([
+                'Buy','Sell','Reinvest Shares','Journaled Shares',
+                'Wire Received','Cash Dividend','Qual Div Reinvest',
+                'Bond Interest','NRA Tax Adj','Journal'
+            ]);
+            txnData = rows
+                .filter(r => validActions.has((r.Action||'').trim()))
+                .map(r => ({
+                    date:   parseSwabDate(r.Date),
+                    action: r.Action.trim(),
+                    symbol: (r.Symbol||'').trim().toUpperCase(),
+                    qty:    parseFloat((r.Quantity||'0').replace(/[,$]/g,'')) || 0,
+                    price:  parseFloat((r.Price||'0').replace(/[$,]/g,''))   || 0,
+                    amount: parseFloat((r.Amount||'0').replace(/[$,]/g,''))  || 0,
+                }))
+                .filter(r => r.date)
+                .sort((a,b) => a.date.localeCompare(b.date));
+
+            const start = txnData[0]?.date || '—';
+            const end   = txnData[txnData.length-1]?.date || '—';
+            document.getElementById('txnStatus').textContent =
+                `已載入 ${txnData.length} 筆（${start} ~ ${end}）`;
+            document.getElementById('buildSnapshotBtn').style.display = '';
+
+            addDiagMsg(`✓ 交易紀錄 ${txnData.length} 筆`, 'diag-ok');
+            saveCurrentUser();
+        },
+        error: e => addDiagMsg('交易紀錄解析失敗: '+e.message, 'diag-err')
+    });
+});
+
+// MM/DD/YYYY → YYYY-MM-DD
+function parseSwabDate(raw) {
+    if (!raw) return '';
+    const m = raw.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return '';
+    return `${m[3]}-${m[1]}-${m[2]}`;
+}
+
+// ── 重建歷史每日持倉狀態 ──
+// 輸出：{ 'YYYY-MM-DD': { 'NVDA': {qty, avgCost}, ... }, ... }
+function buildDailyHoldings() {
+    if (!txnData.length) return {};
+
+    // 目前持倉：{ SYM: { qty, totalCost } }
+    const holdings = {};
+
+    // 股票分割記錄：{ 'TSLA': [{ date, ratio }] }
+    // Journaled Shares 的 qty 代表分割後「多給」的股數
+    // 需要先知道分割前持有多少才能算 ratio，這裡用累積方式
+    const splitEvents = {};
+
+    // 第一遍：找出所有分割事件
+    txnData.forEach(t => {
+        if (t.action === 'Journaled Shares' && t.qty > 0) {
+            if (!splitEvents[t.symbol]) splitEvents[t.symbol] = [];
+            splitEvents[t.symbol].push({ date: t.date, addedQty: t.qty });
+        }
+    });
+
+    // 按日期分組所有交易
+    const byDate = {};
+    txnData.forEach(t => {
+        if (!byDate[t.date]) byDate[t.date] = [];
+        byDate[t.date].push(t);
+    });
+
+    const allDates = Object.keys(byDate).sort();
+    const dailyHoldings = {};
+
+    allDates.forEach(date => {
+        const txns = byDate[date];
+        txns.forEach(t => {
+            if (!t.symbol) return;
+            if (!holdings[t.symbol]) holdings[t.symbol] = { qty: 0, totalCost: 0 };
+            const h = holdings[t.symbol];
+
+            if (t.action === 'Buy' || t.action === 'Reinvest Shares') {
+                h.totalCost += t.qty * t.price;
+                h.qty += t.qty;
+            } else if (t.action === 'Sell') {
+                // FIFO 簡化：賣出時按比例減少成本
+                if (h.qty > 0) {
+                    const ratio = Math.min(t.qty, h.qty) / h.qty;
+                    h.totalCost -= h.totalCost * ratio;
+                    h.qty = Math.max(0, h.qty - t.qty);
+                }
+            } else if (t.action === 'Journaled Shares') {
+                // 股票分割：增加股數，總成本不變（均成本自然下調）
+                h.qty += t.qty;
+            }
+        });
+
+        // 記錄當天持倉快照（深拷貝）
+        dailyHoldings[date] = {};
+        Object.entries(holdings).forEach(([sym, h]) => {
+            if (h.qty > 0.001) {
+                dailyHoldings[date][sym] = {
+                    qty: h.qty,
+                    avgCost: h.qty > 0 ? h.totalCost / h.qty : 0
+                };
+            }
+        });
+    });
+
+    return dailyHoldings;
+}
+
+// ── 主函數：用交易紀錄 + 歷史股價重建快照 ──
+async function buildSnapshotsFromTxn() {
+    if (!txnData.length) { alert('請先匯入交易紀錄'); return; }
+
+    const btn = document.getElementById('buildSnapshotBtn');
+    const statusEl = document.getElementById('txnStatus');
+    btn.disabled = true;
+    btn.textContent = '重建中...';
+
+    // 1. 重建每日持倉
+    statusEl.textContent = '重建每日持倉狀態...';
+    const dailyHoldings = buildDailyHoldings();
+    const allTxnDates = Object.keys(dailyHoldings).sort();
+    if (!allTxnDates.length) {
+        statusEl.textContent = '無有效交易日期';
+        btn.disabled = false; btn.textContent = '📈 重建歷史快照';
+        return;
+    }
+
+    // 2. 找出需要歷史股價的所有標的
+    const allSyms = new Set();
+    Object.values(dailyHoldings).forEach(h => Object.keys(h).forEach(s => allSyms.add(s)));
+    const symsArr = [...allSyms];
+
+    // 3. 抓歷史股價（每個標的一次抓完整範圍）
+    statusEl.textContent = `抓取 ${symsArr.length} 個標的的歷史股價...`;
+    const histPrices = {};  // { SYM: { 'YYYY-MM-DD': price } }
+
+    // 計算需要的時間範圍
+    const startDate = allTxnDates[0];
+    const today = new Date().toISOString().slice(0,10);
+    const daysDiff = Math.ceil((new Date(today) - new Date(startDate)) / 86400000);
+    // Yahoo range 參數：根據天數選擇
+    const range = daysDiff > 365*4 ? '5y' : daysDiff > 365*2 ? '5y' : daysDiff > 365 ? '2y' : '1y';
+
+    for (let i=0; i<symsArr.length; i++) {
+        const sym = symsArr[i];
+        statusEl.textContent = `抓取歷史股價 ${i+1}/${symsArr.length}：${sym}`;
+        try {
+            const url   = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=${range}`;
+            const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const resp  = await fetch(proxy, {signal:AbortSignal.timeout(10000)});
+            const outer = await resp.json();
+            const body  = JSON.parse(outer.contents);
+            const result = body?.chart?.result?.[0];
+            if (!result) continue;
+            const timestamps = result.timestamp || [];
+            const closes     = result.indicators?.quote?.[0]?.close || [];
+            histPrices[sym] = {};
+            timestamps.forEach((ts, j) => {
+                if (closes[j]) {
+                    const d = new Date(ts * 1000).toISOString().slice(0,10);
+                    histPrices[sym][d] = closes[j];
+                }
+            });
+        } catch(e) {}
+        await new Promise(r=>setTimeout(r,250));
+    }
+
+    // 4. 計算每日現金餘額（從今天往回推）
+    statusEl.textContent = '計算每日現金餘額...';
+    const dailyCash = buildDailyCash();
+
+    // 5. 對每個交易日，用當天持倉 × 歷史收盤價 = 市值快照
+    statusEl.textContent = '計算每日市值快照...';
+    let built = 0;
+    const existingDates = new Set(posSnapshots.map(s=>s.date));
+
+    // 生成連續日期（從第一筆交易到今天）
+    const dateRange = [];
+    let cur = new Date(allTxnDates[0]);
+    const endD = new Date(today);
+    while (cur <= endD) {
+        dateRange.push(cur.toISOString().slice(0,10));
+        cur.setDate(cur.getDate()+1);
+    }
+
+    // 對每個日期，找到當天有效的持倉狀態（用最近一個有交易的日期的持倉）
+    let lastKnownHolding = {};
+    let txnDateIdx = 0;
+
+    dateRange.forEach(date => {
+        // 更新到當天最新的持倉狀態
+        while (txnDateIdx < allTxnDates.length && allTxnDates[txnDateIdx] <= date) {
+            lastKnownHolding = dailyHoldings[allTxnDates[txnDateIdx]];
+            txnDateIdx++;
+        }
+        if (!Object.keys(lastKnownHolding).length) return;
+        if (existingDates.has(date)) return;  // 已有快照不覆蓋
+
+        let totalMV = 0, totalCB = 0, covered = 0;
+        Object.entries(lastKnownHolding).forEach(([sym, h]) => {
+            const p = histPrices[sym]?.[date];
+            if (p === undefined) return;
+            totalMV += p * h.qty;
+            totalCB += h.avgCost * h.qty;
+            covered++;
+        });
+
+        const symCount = Object.keys(lastKnownHolding).length;
+        if (covered >= symCount * 0.7 && totalMV > 0) {
+            const cash = dailyCash[date] !== undefined ? dailyCash[date] : 0;
+            posSnapshots.push({ date, totalMV, totalCB, totalCash:cash, totalAssets:totalMV+cash, backfilled: true });
+            existingDates.add(date);
+            built++;
+        }
+    });
+
+    posSnapshots.sort((a,b)=>a.date.localeCompare(b.date));
+    saveCurrentUser();
+
+    statusEl.textContent = `完成！重建 ${built} 個歷史快照（${allTxnDates[0]} ~ ${today}）`;
+    btn.disabled = false; btn.textContent = '📈 重建歷史快照';
+
+    // 切換到趨勢報表頁面顯示結果
+    switchPage('trend');
+    renderTrend();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1550,8 +1834,48 @@ function radarRow(sym, q, compact=false) {
 }
 
 // ══════════════════════════════════════════════════════
-//  TREND CHARTS (純 Canvas，不依賴外部圖表庫)
+//  VERIFY — 對照 Schwab 數字驗證正確性
 // ══════════════════════════════════════════════════════
+function runVerify() {
+    const schwabMV    = parseFloat(document.getElementById('v-schwabMV').value)    || null;
+    const schwabCash  = parseFloat(document.getElementById('v-schwabCash').value)  || null;
+    const schwabTotal = parseFloat(document.getElementById('v-schwabTotal').value) || null;
+
+    // 系統計算值
+    const sysMV    = inventory.reduce((sum,it)=>{ const p=prices[it.Symbol]; return p?sum+p*parseFloat(it.Shares):sum; }, 0);
+    const sysCash  = currentCash;
+    const sysTotal = sysMV + sysCash;
+
+    const row = (label, sys, schwab) => {
+        if (schwab === null) return '';
+        const diff = sys - schwab;
+        const pct  = schwab > 0 ? (diff/schwab*100).toFixed(2) : '—';
+        const cls  = Math.abs(diff) < 1 ? 'pos' : Math.abs(diff) < schwab*0.01 ? '' : 'neg';
+        return `<tr>
+            <td style="text-align:left">${label}</td>
+            <td>${fmtUSD(sys)}</td>
+            <td>${fmtUSD(schwab)}</td>
+            <td class="${cls}">${fmtUSD(diff)}</td>
+            <td class="${cls}">${pct}%</td>
+        </tr>`;
+    };
+
+    document.getElementById('verifyResult').innerHTML = `
+        <table class="tbl" style="font-size:.78rem">
+            <thead><tr>
+                <th style="text-align:left">項目</th>
+                <th>系統計算</th><th>Schwab 實際</th><th>差異</th><th>差異%</th>
+            </tr></thead>
+            <tbody>
+                ${row('持股市值',    sysMV,    schwabMV)}
+                ${row('現金餘額',    sysCash,  schwabCash)}
+                ${row('總資產',      sysTotal, schwabTotal)}
+            </tbody>
+        </table>
+        <div style="font-size:.7rem;color:var(--text3);margin-top:8px">
+            差異 &lt; $1 視為正常（股價延遲）｜差異 &gt; 1% 請回報
+        </div>`;
+}
 function renderTrend() {
     renderSnapshotChart();
     renderMonthlyChart();
@@ -1588,15 +1912,16 @@ function renderSnapshotChart() {
         return;
     }
 
-    const labels = posSnapshots.map(s=>s.date);
-    const mvVals = posSnapshots.map(s=>s.totalMV);
-    const cbVals = posSnapshots.map(s=>s.totalCB);
-    const urVals = posSnapshots.map(s=>s.totalMV - s.totalCB); // 未實現損益
+    const labels  = posSnapshots.map(s=>s.date);
+    const mvVals  = posSnapshots.map(s=>s.totalMV);
+    const cbVals  = posSnapshots.map(s=>s.totalCB);
+    const cashVals= posSnapshots.map(s=>s.totalCash || 0);
+    const taVals  = posSnapshots.map(s=>s.totalAssets || s.totalMV);  // 總資產
 
     const PAD = {t:20, r:20, b:44, l:80};
     const cW = W-PAD.l-PAD.r, cH = H-PAD.t-PAD.b;
 
-    const allVals = [...mvVals, ...cbVals];
+    const allVals = [...mvVals, ...cbVals, ...taVals].filter(v=>v>0);
     const minV = Math.min(...allVals) * 0.97;
     const maxV = Math.max(...allVals) * 1.03;
     const range = maxV - minV || 1;
@@ -1613,43 +1938,59 @@ function renderSnapshotChart() {
         ctx.fillText(fmtUSD(v), PAD.l-6, y+4);
     }
 
-    // 市值和成本基礎之間填充（代表未實現損益）
+    // 填充：持股市值 vs 成本基礎之間（未實現損益）
     ctx.beginPath();
     mvVals.forEach((v,i)=>{ i===0?ctx.moveTo(toX(i),toY(v)):ctx.lineTo(toX(i),toY(v)); });
     cbVals.slice().reverse().forEach((v,i)=>{ ctx.lineTo(toX(cbVals.length-1-i), toY(v)); });
     ctx.closePath();
-    // 判斷整體是獲利還是虧損
-    const lastUR = urVals[urVals.length-1] || 0;
-    ctx.fillStyle = lastUR >= 0 ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)';
+    const lastUR = (mvVals[mvVals.length-1]||0) - (cbVals[cbVals.length-1]||0);
+    ctx.fillStyle = lastUR >= 0 ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)';
     ctx.fill();
 
-    // 成本基礎線（橘色）
+    // 成本基礎線（橘色虛線）
     ctx.strokeStyle='#d97706'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
     ctx.beginPath();
     cbVals.forEach((v,i)=>{ i===0?ctx.moveTo(toX(i),toY(v)):ctx.lineTo(toX(i),toY(v)); });
     ctx.stroke(); ctx.setLineDash([]);
 
-    // 市值線（藍色）
-    ctx.strokeStyle='#2563eb'; ctx.lineWidth=2.5;
+    // 持股市值線（藍色）
+    ctx.strokeStyle='#2563eb'; ctx.lineWidth=2;
     ctx.beginPath();
     mvVals.forEach((v,i)=>{ i===0?ctx.moveTo(toX(i),toY(v)):ctx.lineTo(toX(i),toY(v)); });
     ctx.stroke();
 
-    // 資料點（回填的用小灰點，手動記錄的用實心點）
+    // 總資產線（深綠色，最粗）
+    const hasCash = taVals.some(v=>v>0);
+    if (hasCash) {
+        ctx.strokeStyle='#15803d'; ctx.lineWidth=2.5;
+        ctx.beginPath();
+        taVals.forEach((v,i)=>{ i===0?ctx.moveTo(toX(i),toY(v)):ctx.lineTo(toX(i),toY(v)); });
+        ctx.stroke();
+    }
+
+    // 資料點
     posSnapshots.forEach((s,i) => {
-        const isBackfilled = s.backfilled === true;
-        // 市值點
-        ctx.fillStyle = isBackfilled ? 'rgba(37,99,235,0.35)' : '#2563eb';
-        ctx.beginPath(); ctx.arc(toX(i), toY(s.totalMV), isBackfilled?2:4, 0, Math.PI*2); ctx.fill();
-        // 成本點
-        ctx.fillStyle = isBackfilled ? 'rgba(217,119,6,0.35)' : '#d97706';
-        ctx.beginPath(); ctx.arc(toX(i), toY(s.totalCB), isBackfilled?2:4, 0, Math.PI*2); ctx.fill();
-        // hover label（最後一點顯示數值）
+        const isBF = s.backfilled === true;
+        const r1 = isBF ? 2 : 4;
+        // 持股市值點
+        ctx.fillStyle = isBF ? 'rgba(37,99,235,0.35)' : '#2563eb';
+        ctx.beginPath(); ctx.arc(toX(i), toY(s.totalMV), r1, 0, Math.PI*2); ctx.fill();
+        // 成本基礎點
+        ctx.fillStyle = isBF ? 'rgba(217,119,6,0.35)' : '#d97706';
+        ctx.beginPath(); ctx.arc(toX(i), toY(s.totalCB), r1, 0, Math.PI*2); ctx.fill();
+        // 總資產點
+        if (hasCash && s.totalAssets) {
+            ctx.fillStyle = isBF ? 'rgba(21,128,61,0.35)' : '#15803d';
+            ctx.beginPath(); ctx.arc(toX(i), toY(s.totalAssets), r1, 0, Math.PI*2); ctx.fill();
+        }
+        // 最後一點標數值
         if (i === posSnapshots.length-1) {
-            ctx.fillStyle='#2563eb'; ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
-            ctx.fillText(fmtUSD(s.totalMV), toX(i)+8, toY(s.totalMV)+4);
-            ctx.fillStyle='#d97706';
-            ctx.fillText(fmtUSD(s.totalCB), toX(i)+8, toY(s.totalCB)+4);
+            ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
+            ctx.fillStyle='#2563eb'; ctx.fillText(fmtUSD(s.totalMV), toX(i)+8, toY(s.totalMV)+4);
+            ctx.fillStyle='#d97706'; ctx.fillText(fmtUSD(s.totalCB), toX(i)+8, toY(s.totalCB)+4);
+            if (hasCash && s.totalAssets) {
+                ctx.fillStyle='#15803d'; ctx.fillText(fmtUSD(s.totalAssets), toX(i)+8, toY(s.totalAssets)+4);
+            }
         }
     });
 
@@ -1664,25 +2005,30 @@ function renderSnapshotChart() {
     const backfilledCount = posSnapshots.filter(s=>s.backfilled).length;
     const manualCount = posSnapshots.length - backfilledCount;
     document.getElementById('snapshotLegend').innerHTML = `
-        <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>總市值</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div>總資產（持股+現金）</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>持股市值</div>
         <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>成本基礎（虛線）</div>
         <div class="legend-item"><div class="legend-dot" style="background:${lastUR_>=0?'rgba(22,163,74,0.4)':'rgba(220,38,38,0.4)'}"></div>
             未實現損益：${fmtUSD(lastUR_)}</div>
-        <div class="legend-item" style="color:var(--text3)">共 ${posSnapshots.length} 個快照（${manualCount} 筆手動｜${backfilledCount} 筆歷史回填）</div>`;
+        <div class="legend-item" style="color:var(--text3)">共 ${posSnapshots.length} 筆（${manualCount} 手動｜${backfilledCount} 回填）</div>`;
 
     // 快照明細表
     const rows = [...posSnapshots].reverse().slice(0,10);
     document.getElementById('snapshotTable').innerHTML = `
         <table class="tbl" style="font-size:.75rem">
             <thead><tr>
-                <th style="text-align:left">快照日期</th>
-                <th>總市值</th><th>成本基礎</th><th>未實現損益</th><th>未實現%</th>
+                <th style="text-align:left">日期</th>
+                <th>總資產</th><th>持股市值</th><th>現金</th>
+                <th>成本基礎</th><th>未實現損益</th><th>未實現%</th>
             </tr></thead>
             <tbody>${rows.map(s=>{
                 const ur=s.totalMV-s.totalCB, up=s.totalCB>0?ur/s.totalCB*100:0;
+                const cash=s.totalCash||0, ta=s.totalAssets||s.totalMV;
                 return `<tr>
-                    <td class="muted">${s.date}</td>
+                    <td class="muted">${s.date}${s.backfilled?'<span style="color:var(--text3);font-size:.65rem"> 回填</span>':''}</td>
+                    <td style="font-weight:600">${fmtUSD(ta)}</td>
                     <td>${fmtUSD(s.totalMV)}</td>
+                    <td class="muted">${fmtUSD(cash)}</td>
                     <td>${fmtUSD(s.totalCB)}</td>
                     <td class="${ur>=0?'pos':'neg'}">${fmtUSD(ur)}</td>
                     <td class="${up>=0?'pos':'neg'}">${up>=0?'+':''}${up.toFixed(1)}%</td>
@@ -1930,7 +2276,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.6',
+        version: 'V4.8',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
