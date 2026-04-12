@@ -46,9 +46,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.8</title>
+<title>獵人追蹤戰情室 V4.9</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+<script>
+// 套件載入檢查（備用 CDN）
+window.addEventListener('load', function() {
+    if (typeof Papa === 'undefined') {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/papaparse@5.3.2/papaparse.min.js';
+        document.head.appendChild(s);
+    }
+    if (typeof XLSX === 'undefined') {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js';
+        document.head.appendChild(s);
+    }
+});
+</script>
 <style>
 /* ── 字體 ── */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
@@ -342,7 +357,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.8</span>
+        <span class="header-ver">V4.9</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -729,7 +744,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.8 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.9 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -914,6 +929,7 @@ function downloadCSV(content, filename) {
 // ══════════════════════════════════════════════════════
 document.getElementById('inventoryFile').addEventListener('change', function(e) {
     const file = e.target.files[0]; if (!file) return;
+    if (typeof Papa === 'undefined') { alert('PapaParse 套件未載入，請檢查網路連線後重新整理頁面'); return; }
     Papa.parse(file, {
         skipEmptyLines: false,
         complete: function(results) {
@@ -922,8 +938,12 @@ document.getElementById('inventoryFile').addEventListener('change', function(e) 
                 const firstCell = (rows[0]&&rows[0][0]) ? rows[0][0].toString() : '';
                 if (firstCell.includes('Positions for')) parseSchwabPositions(rows);
                 else parseSimpleInventory(rows);
-            } catch(err) { addDiagMsg('持股匯入失敗: '+err.message, 'diag-err'); }
-        }
+            } catch(err) {
+                addDiagMsg('持股匯入失敗: '+err.message, 'diag-err');
+                console.error(err);
+            }
+        },
+        error: function(err) { addDiagMsg('CSV 解析失敗: '+err.message, 'diag-err'); }
     });
 });
 
@@ -1013,6 +1033,7 @@ function pcn(raw) {
 // ══════════════════════════════════════════════════════
 document.getElementById('statementFile').addEventListener('change', function(e) {
     const file = e.target.files[0]; if (!file) return;
+    if (typeof Papa === 'undefined') { alert('PapaParse 套件未載入，請重新整理頁面'); return; }
     Papa.parse(file, {
         skipEmptyLines: false,
         complete: function(results) {
@@ -1205,6 +1226,7 @@ let txnData = [];  // 解析後的原始交易記錄
 
 document.getElementById('txnFile').addEventListener('change', function(e) {
     const file = e.target.files[0]; if (!file) return;
+    if (typeof Papa === 'undefined') { alert('PapaParse 套件未載入，請重新整理頁面'); return; }
     Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -2276,7 +2298,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.8',
+        version: 'V4.9',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
