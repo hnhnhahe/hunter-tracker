@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.11</title>
+<title>獵人追蹤戰情室 V4.12</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -357,7 +357,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.11</span>
+        <span class="header-ver">V4.12</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -749,7 +749,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.11 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.12 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1231,7 +1231,7 @@ function buildDailyCash() {
 //  處理的 Action：Buy, Sell, Reinvest Shares, Journaled Shares（股票分割）
 //  忽略：Dividend, Wire, NRA Tax Adj, Journal, Bond Interest 等
 // ══════════════════════════════════════════════════════
-let txnData = [];  // 解析後的原始交易記錄
+// 交易記錄已在 STATE 區塊宣告（let txnData = []）
 
 function handleTxnFile(input) {
     const file = input.files[0]; if (!file) return;
@@ -2315,7 +2315,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.11',
+        version: 'V4.12',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
