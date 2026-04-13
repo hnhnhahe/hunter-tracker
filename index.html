@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.17</title>
+<title>獵人追蹤戰情室 V4.18</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -362,7 +362,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.17</span>
+        <span class="header-ver">V4.18</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -756,7 +756,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.17 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.18 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -784,6 +784,8 @@ const COL_DEFS = [
     { key:'realized',  label:'累積實現損益', align:'right', sortable:true  },
     { key:'days',      label:'周轉天數',     align:'right', sortable:true  },
     { key:'dailyOut',  label:'日均產值',     align:'right', sortable:true  },
+    { key:'week52',    label:'52週位置',     align:'left',  sortable:true  },
+    { key:'target',    label:'目標售價',     align:'right', sortable:true  },
 ];
 const DEFAULT_COL_ORDER = COL_DEFS.map(c=>c.key);
 let colOrder = JSON.parse(localStorage.getItem('hunter_col_order') || 'null') || [...DEFAULT_COL_ORDER];
@@ -801,6 +803,8 @@ let txnData     = [];   // Schwab Transaction CSV 原始交易記錄
 let initialPricesSnapshot = {};
 let posSnapshots = [];  // [{date, totalMV, totalCB, totalCash, totalAssets}]
 let currentCash  = 0;   // 今天 Positions CSV 裡的現金餘額
+let weekData    = {};   // 52週高低點 { SYM: { high52, low52 } }
+let notes       = {};   // 備忘錄 { SYM: { target, entryReason, stopLoss } }
 let sortCol = 'dailyOut', sortDir = 'desc';
 
 // 雷達
@@ -825,7 +829,7 @@ function saveUsers() {
 
 function saveCurrentUser() {
     if (!activeUser) return;
-    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash };
+    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash, weekData, notes };
     localStorage.setItem(`hunter_${activeUser}_data`, JSON.stringify(data));
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     document.getElementById('lastSaved').textContent = `已存檔 ${now}`;
@@ -844,6 +848,8 @@ function loadCurrentUser() {
             posSnapshots = d.posSnapshots || [];
             txnData     = d.txnData     || [];
             currentCash = d.currentCash || 0;
+            weekData    = d.weekData    || {};
+            notes       = d.notes       || {};
             initialPricesSnapshot = d.initialPricesSnapshot || {};
         } catch(e) { inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; }
     } else {
@@ -1176,6 +1182,17 @@ async function refreshPrices() {
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
     tm.textContent=`${now} ｜ API ${fetched}/${syms.length}${fb?` ｜ ${fb}筆快取`:''}`;
     src.textContent='Yahoo Finance (15min delay)';
+    // 更新 52週高低點（從 fetchQuotes 的資料取得）
+    try {
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=regularMarketPrice,symbol,fiftyTwoWeekHigh,fiftyTwoWeekLow`;
+        const resp = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(10000)});
+        const body = await resp.json();
+        (body?.quoteResponse?.result||[]).forEach(q=>{
+            if (q.fiftyTwoWeekHigh && q.fiftyTwoWeekLow) {
+                weekData[q.symbol] = { high52: q.fiftyTwoWeekHigh, low52: q.fiftyTwoWeekLow };
+            }
+        });
+    } catch(e) {}
     updateUnrealizedKPI();
     saveCurrentUser(); render();
 }
@@ -1534,6 +1551,12 @@ function getVal(item,col) {
         case 'weight':    return wt;
         case 'realized':  return s.gain;
         case 'days':      return s.days;
+        case 'week52': {
+            const w = weekData[item.Symbol];
+            if (!w || !p) return -9999;
+            return (p - w.low52) / (w.high52 - w.low52) * 100;
+        }
+        case 'target':  return parseFloat(notes[item.Symbol]?.target) || -9999;
         case 'dailyOut':  return do_;
         default: return 0;
     }
@@ -1605,11 +1628,48 @@ function render() {
             mv_=p*sh; ur_=mv_-cb; up_=cb>0?ur_/cb*100:0;
             wt_=totalMV>0?mv_/totalMV*100:0;
         }
-        const gc=s.gain>0?'pos':s.gain<0?'neg':'muted';
-        const dc=do_>0?'pos':do_<0?'neg':'muted';
+        // 52週位置進度條
+        const w52 = weekData[item.Symbol];
+        let week52Cell = '<td><span class="muted">—</span></td>';
+        if (w52 && p !== undefined) {
+            const range52 = w52.high52 - w52.low52;
+            const pos52 = range52 > 0 ? ((p - w52.low52) / range52 * 100) : 0;
+            const pct52 = Math.max(0, Math.min(100, pos52));
+            const barColor = pct52 >= 80 ? '#ef4444' : pct52 >= 50 ? '#f59e0b' : '#22c55e';
+            week52Cell = `<td>
+                <div style="display:flex;align-items:center;gap:6px;min-width:100px">
+                    <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden">
+                        <div style="width:${pct52}%;height:100%;background:${barColor};border-radius:3px"></div>
+                    </div>
+                    <span style="font-size:.72rem;color:var(--text2);width:32px;text-align:right">${pct52.toFixed(0)}%</span>
+                </div>
+                <div style="font-size:.65rem;color:var(--text3)">${fmtUSD(w52.low52)} ~ ${fmtUSD(w52.high52)}</div>
+            </td>`;
+        }
+
+        // 目標售價
+        const note = notes[item.Symbol] || {};
+        const tgt = parseFloat(note.target);
+        let targetCell = '<td><span class="muted">—</span></td>';
+        if (tgt > 0 && p !== undefined) {
+            const dist = ((tgt - p) / p * 100);
+            const cls = dist >= 0 ? 'pos' : 'neg';
+            targetCell = `<td>
+                <div style="font-family:var(--mono)">$${tgt.toFixed(2)}</div>
+                <div style="font-size:.7rem" class="${cls}">${dist>=0?'+':''}${dist.toFixed(1)}%</div>
+            </td>`;
+        } else if (tgt > 0) {
+            targetCell = `<td><span style="font-family:var(--mono)">$${tgt.toFixed(2)}</span></td>`;
+        }
+
+        const hasNote = note.entryReason || note.stopLoss || tgt > 0;
+
         // 每欄的 cell 內容
         const cellMap = {
-            symbol:    `<td class="col-frozen"><span class="sym-cell">${item.Symbol}</span></td>`,
+            symbol:    `<td class="col-frozen" style="cursor:pointer" onclick="toggleNote('${item.Symbol}')">
+                            <span class="sym-cell">${item.Symbol}</span>
+                            ${hasNote ? '<span style="font-size:.6rem;color:var(--blue);margin-left:4px">📝</span>' : ''}
+                        </td>`,
             shares:    `<td>${sh.toLocaleString()}</td>`,
             cost:      `<td>$${co.toFixed(2)}</td>`,
             price:     `<td>${p!==undefined?`<span style="font-family:var(--mono)">$${p.toFixed(2)}</span>`:'<span class="muted">—</span>'}</td>`,
@@ -1621,8 +1681,50 @@ function render() {
             realized:  `<td class="${gc}">${fmtUSD(s.gain)}</td>`,
             days:      `<td class="muted">${s.days>0?s.days:'—'}</td>`,
             dailyOut:  `<td class="${dc}" style="font-size:.9rem;font-weight:700">${s.days>0?fmtUSD(do_):'—'}</td>`,
+            week52:    week52Cell,
+            target:    targetCell,
         };
-        return `<tr>${colOrder.map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
+        const mainRow = `<tr>${colOrder.map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
+
+        // 備忘錄展開列
+        const noteRowId = `note-row-${item.Symbol}`;
+        const noteRow = `<tr id="${noteRowId}" style="display:none;background:#fafafa">
+            <td colspan="${colOrder.length}" style="padding:12px 16px">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
+                    <div>
+                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">🎯 目標售價</div>
+                        <div style="display:flex;gap:4px">
+                            <input class="input input-sm" id="note-target-${item.Symbol}" value="${note.target||''}"
+                                placeholder="例如 250.00" type="number" style="flex:1"
+                                onchange="saveNote('${item.Symbol}')">
+                            <button class="btn btn-outline btn-sm" onclick="clearNoteField('${item.Symbol}','target')" title="清除">✕</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">📈 進場理由</div>
+                        <div style="display:flex;gap:4px">
+                            <input class="input input-sm" id="note-entry-${item.Symbol}" value="${(note.entryReason||'').replace(/"/g,'&quot;')}"
+                                placeholder="例如：AI算力核心受益" style="flex:1"
+                                onchange="saveNote('${item.Symbol}')">
+                            <button class="btn btn-outline btn-sm" onclick="clearNoteField('${item.Symbol}','entryReason')" title="清除">✕</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">🛑 停損條件</div>
+                        <div style="display:flex;gap:4px">
+                            <input class="input input-sm" id="note-stop-${item.Symbol}" value="${(note.stopLoss||'').replace(/"/g,'&quot;')}"
+                                placeholder="例如：跌破 $150" style="flex:1"
+                                onchange="saveNote('${item.Symbol}')">
+                            <button class="btn btn-outline btn-sm" onclick="clearNoteField('${item.Symbol}','stopLoss')" title="清除">✕</button>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-danger btn-sm" onclick="clearAllNote('${item.Symbol}')">清除全部</button>
+                    </div>
+                </div>
+            </td>
+        </tr>`;
+        return mainRow + noteRow;
     }).join('');
 }
 
@@ -1745,7 +1847,51 @@ function renderWlTable() {
 }
 
 // ══════════════════════════════════════════════════════
-//  即時查詢搜尋下拉（Yahoo Finance 搜尋 API）
+//  備忘錄（目標售價 / 進場理由 / 停損條件）
+// ══════════════════════════════════════════════════════
+function toggleNote(sym) {
+    const row = document.getElementById(`note-row-${sym}`);
+    if (!row) return;
+    const isOpen = row.style.display !== 'none';
+    row.style.display = isOpen ? 'none' : '';
+}
+
+function saveNote(sym) {
+    const target     = document.getElementById(`note-target-${sym}`)?.value.trim() || '';
+    const entryReason= document.getElementById(`note-entry-${sym}`)?.value.trim()  || '';
+    const stopLoss   = document.getElementById(`note-stop-${sym}`)?.value.trim()   || '';
+    if (target || entryReason || stopLoss) {
+        notes[sym] = { target, entryReason, stopLoss };
+    } else {
+        delete notes[sym];
+    }
+    saveCurrentUser();
+    // 更新 Symbol 欄的備忘錄圖示（不重繪整個表格）
+    const symCell = document.querySelector(`td.col-frozen span.sym-cell`);
+    render();
+}
+
+function clearNoteField(sym, field) {
+    if (!notes[sym]) return;
+    notes[sym][field] = '';
+    const elMap = { target:`note-target-${sym}`, entryReason:`note-entry-${sym}`, stopLoss:`note-stop-${sym}` };
+    const el = document.getElementById(elMap[field]);
+    if (el) el.value = '';
+    saveCurrentUser();
+    render();
+    // 重新開啟備忘錄列
+    setTimeout(() => {
+        const row = document.getElementById(`note-row-${sym}`);
+        if (row) row.style.display = '';
+    }, 50);
+}
+
+function clearAllNote(sym) {
+    if (!confirm(`確定清除 ${sym} 的所有備忘錄？`)) return;
+    delete notes[sym];
+    saveCurrentUser();
+    render();
+}
 // ══════════════════════════════════════════════════════
 let searchDebounceTimer = null;
 let searchDropdownActive = -1;
@@ -2366,6 +2512,7 @@ function clearAllData() {
     activeUser = '我的帳戶';
     inventory = []; stats = {}; prices = {}; rawTrades = [];
     txnData = []; posSnapshots = []; currentCash = 0;
+    weekData = {}; notes = {};
     initialPricesSnapshot = {};
     saveUsers();
     renderUserBtns();
@@ -2424,7 +2571,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.17',
+        version: 'V4.18',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
