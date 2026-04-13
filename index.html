@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.24</title>
+<title>獵人追蹤戰情室 V4.25</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -370,7 +370,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.24</span>
+        <span class="header-ver">V4.25</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" id="hideNumBtn" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="toggleHideNumbers()">👁 隱藏數字</button>
@@ -766,7 +766,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.24 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.25 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1441,29 +1441,28 @@ async function buildSnapshotsFromTxn() {
     statusEl.textContent = `抓取 ${symsArr.length} 個標的的歷史股價...`;
     const histPrices = {};  // { SYM: { 'YYYY-MM-DD': price } }
 
-    // 計算需要的時間範圍
+    // 計算需要的時間範圍（Finnhub 免費版限制最近一年）
     const startDate = allTxnDates[0];
     const today = new Date().toISOString().slice(0,10);
-    const daysDiff = Math.ceil((new Date(today) - new Date(startDate)) / 86400000);
-    // Yahoo range 參數：根據天數選擇
-    const range = daysDiff > 365*4 ? '5y' : daysDiff > 365*2 ? '5y' : daysDiff > 365 ? '2y' : '1y';
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const historyFrom = oneYearAgo.toISOString().slice(0,10);
+
+    statusEl.textContent = `注意：Finnhub 免費版歷史資料限最近一年（${historyFrom} 起）`;
+    await new Promise(r=>setTimeout(r,1500));
 
     for (let i=0; i<symsArr.length; i++) {
         const sym = symsArr[i];
         statusEl.textContent = `抓取歷史股價 ${i+1}/${symsArr.length}：${sym}`;
         try {
-            const url   = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=${range}`;
-            const resp  = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(15000)});
+            const resp  = await fetch(apiHistory(sym, historyFrom, today), {signal:AbortSignal.timeout(15000)});
             const body  = await resp.json();
-            const result = body?.chart?.result?.[0];
-            if (!result) continue;
-            const timestamps = result.timestamp || [];
-            const closes     = result.indicators?.quote?.[0]?.close || [];
+            if (body?.s !== 'ok' || !body?.t) continue;
             histPrices[sym] = {};
-            timestamps.forEach((ts, j) => {
-                if (closes[j]) {
+            body.t.forEach((ts, j) => {
+                if (body.c[j]) {
                     const d = new Date(ts * 1000).toISOString().slice(0,10);
-                    histPrices[sym][d] = closes[j];
+                    histPrices[sym][d] = body.c[j];
                 }
             });
         } catch(e) {}
@@ -2696,7 +2695,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.24',
+        version: 'V4.25',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
