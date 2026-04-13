@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.22</title>
+<title>獵人追蹤戰情室 V4.24</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -370,7 +370,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.22</span>
+        <span class="header-ver">V4.24</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" id="hideNumBtn" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="toggleHideNumbers()">👁 隱藏數字</button>
@@ -766,7 +766,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.22 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.24 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1422,10 +1422,7 @@ async function buildSnapshotsFromTxn() {
     btn.disabled = true;
     btn.textContent = '重建中...';
 
-    // 1. 清除舊的回填快照（保留手動記錄的）
-    posSnapshots = posSnapshots.filter(s => !s.backfilled);
-
-    // 2. 重建每日持倉
+    // 1. 重建每日持倉（先不清舊資料）
     statusEl.textContent = '重建每日持倉狀態...';
     const dailyHoldings = buildDailyHoldings();
     const allTxnDates = Object.keys(dailyHoldings).sort();
@@ -1480,7 +1477,10 @@ async function buildSnapshotsFromTxn() {
     // 5. 對每個交易日，用當天持倉 × 歷史收盤價 = 市值快照
     statusEl.textContent = '計算每日市值快照...';
     let built = 0;
-    const existingDates = new Set(posSnapshots.map(s=>s.date));
+    // 用暫存陣列，建完成功再替換，避免中途失敗導致資料遺失
+    const manualSnapshots = posSnapshots.filter(s => !s.backfilled);
+    const newSnapshots = [...manualSnapshots];
+    const existingDates = new Set(manualSnapshots.map(s=>s.date));
 
     // 生成連續日期（從第一筆交易到今天）
     const dateRange = [];
@@ -1516,13 +1516,15 @@ async function buildSnapshotsFromTxn() {
         const symCount = Object.keys(lastKnownHolding).length;
         if (covered >= symCount * 0.7 && totalMV > 0) {
             const cash = dailyCash[date] !== undefined ? dailyCash[date] : 0;
-            posSnapshots.push({ date, totalMV, totalCB, totalCash:cash, totalAssets:totalMV+cash, backfilled: true });
+            newSnapshots.push({ date, totalMV, totalCB, totalCash:cash, totalAssets:totalMV+cash, backfilled: true });
             existingDates.add(date);
             built++;
         }
     });
 
-    posSnapshots.sort((a,b)=>a.date.localeCompare(b.date));
+    // 建完成功，才替換 posSnapshots
+    newSnapshots.sort((a,b)=>a.date.localeCompare(b.date));
+    posSnapshots = newSnapshots;
     saveCurrentUser();
 
     statusEl.textContent = `完成！重建 ${built} 個歷史快照（${allTxnDates[0]} ~ ${today}）`;
@@ -2272,10 +2274,12 @@ function renderSnapshotChart() {
             const labelX = toX(i) > W - 80 ? toX(i) - 8 : toX(i) + 8;
             const align = toX(i) > W - 80 ? 'right' : 'left';
             ctx.textAlign = align;
-            ctx.fillStyle='#2563eb'; ctx.fillText(fmtUSD(s.totalMV), labelX, toY(s.totalMV)+4);
-            ctx.fillStyle='#d97706'; ctx.fillText(fmtUSD(s.totalCB), labelX, toY(s.totalCB)+4);
-            if (hasCash && s.totalAssets) {
-                ctx.fillStyle='#15803d'; ctx.fillText(fmtUSD(s.totalAssets), labelX, toY(s.totalAssets)+4);
+            if (!numbersHidden) {
+                ctx.fillStyle='#2563eb'; ctx.fillText(fmtUSD(s.totalMV), labelX, toY(s.totalMV)+4);
+                ctx.fillStyle='#d97706'; ctx.fillText(fmtUSD(s.totalCB), labelX, toY(s.totalCB)+4);
+                if (hasCash && s.totalAssets) {
+                    ctx.fillStyle='#15803d'; ctx.fillText(fmtUSD(s.totalAssets), labelX, toY(s.totalAssets)+4);
+                }
             }
         }
     });
@@ -2295,11 +2299,12 @@ function renderSnapshotChart() {
         <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>持股市值</div>
         <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>成本基礎（虛線）</div>
         <div class="legend-item"><div class="legend-dot" style="background:${lastUR_>=0?'rgba(22,163,74,0.4)':'rgba(220,38,38,0.4)'}"></div>
-            未實現損益：${fmtUSD(lastUR_)}</div>
+            未實現損益：<span class="${numbersHidden?'num-hidden':''}">${fmtUSD(lastUR_)}</span></div>
         <div class="legend-item" style="color:var(--text3)">共 ${posSnapshots.length} 筆（${manualCount} 手動｜${backfilledCount} 回填）</div>`;
 
     // 快照明細表
     const rows = [...posSnapshots].reverse().slice(0,10);
+    const nh = numbersHidden ? 'num-hidden' : '';
     document.getElementById('snapshotTable').innerHTML = `
         <table class="tbl" style="font-size:.75rem">
             <thead><tr>
@@ -2312,11 +2317,11 @@ function renderSnapshotChart() {
                 const cash=s.totalCash||0, ta=s.totalAssets||s.totalMV;
                 return `<tr>
                     <td class="muted">${s.date}${s.backfilled?'<span style="color:var(--text3);font-size:.65rem"> 回填</span>':''}</td>
-                    <td style="font-weight:600">${fmtUSD(ta)}</td>
-                    <td>${fmtUSD(s.totalMV)}</td>
-                    <td class="muted">${fmtUSD(cash)}</td>
-                    <td>${fmtUSD(s.totalCB)}</td>
-                    <td class="${ur>=0?'pos':'neg'}">${fmtUSD(ur)}</td>
+                    <td class="${nh}" style="font-weight:600">${fmtUSD(ta)}</td>
+                    <td class="${nh}">${fmtUSD(s.totalMV)}</td>
+                    <td class="muted ${nh}">${fmtUSD(cash)}</td>
+                    <td class="${nh}">${fmtUSD(s.totalCB)}</td>
+                    <td class="${ur>=0?'pos':'neg'} ${nh}">${fmtUSD(ur)}</td>
                     <td class="${up>=0?'pos':'neg'}">${up>=0?'+':''}${up.toFixed(1)}%</td>
                 </tr>`;
             }).join('')}</tbody>
@@ -2691,7 +2696,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.22',
+        version: 'V4.24',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
