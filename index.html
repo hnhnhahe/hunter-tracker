@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.21</title>
+<title>獵人追蹤戰情室 V4.22</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -350,6 +350,14 @@ input[type=file]::file-selector-button {
 .tbl th.drag-over { background: var(--blue-l); outline: 2px dashed var(--blue); }
 .tbl th.dragging  { opacity: 0.4; }
 
+/* ── 停損警告 ── */
+.tbl tbody tr.stop-alert { background: #fef2f2 !important; }
+.tbl tbody tr.stop-alert td.col-frozen { background: #fef2f2 !important; }
+.stop-warn { font-size:.65rem; color:#dc2626; font-weight:700; margin-left:4px; }
+
+/* ── 數字隱藏 ── */
+.num-hidden { filter: blur(6px); user-select:none; pointer-events:none; }
+
 /* ── 備份 MODAL ── */
 .backup-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .backup-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.82rem; }
@@ -362,9 +370,11 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.21</span>
+        <span class="header-ver">V4.22</span>
     </div>
     <div class="header-right">
+        <button class="btn btn-outline btn-sm" id="hideNumBtn" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="toggleHideNumbers()">👁 隱藏數字</button>
+        <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="exportReport()">📊 匯出報表</button>
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="downloadInventoryTemplate()">📥 持股範例</button>
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="downloadStatementTemplate()">📥 對帳單範例</button>
@@ -756,7 +766,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.21 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.22 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1668,27 +1678,32 @@ function render() {
 
         const hasNote = note.entryReason || note.stopLoss || tgt > 0;
 
+        // 停損警告
+        const stopPrice = parseFloat(note.stopLoss);
+        const isStopAlert = p !== undefined && stopPrice > 0 && p < stopPrice;
+
         // 每欄的 cell 內容
         const cellMap = {
             symbol:    `<td class="col-frozen" style="cursor:pointer" onclick="toggleNote('${item.Symbol}')">
                             <span class="sym-cell">${item.Symbol}</span>
-                            ${hasNote ? '<span style="font-size:.6rem;color:var(--blue);margin-left:4px">📝</span>' : ''}
+                            ${isStopAlert ? '<span class="stop-warn">⚠ 停損</span>' : ''}
+                            ${hasNote && !isStopAlert ? '<span style="font-size:.6rem;color:var(--blue);margin-left:4px">📝</span>' : ''}
                         </td>`,
             shares:    `<td>${sh.toLocaleString()}</td>`,
-            cost:      `<td>$${co.toFixed(2)}</td>`,
+            cost:      `<td class="${numbersHidden?'num-hidden':''}">$${co.toFixed(2)}</td>`,
             price:     `<td>${p!==undefined?`<span style="font-family:var(--mono)">$${p.toFixed(2)}</span>`:'<span class="muted">—</span>'}</td>`,
-            costBasis: `<td>${cb>0?`<span style="color:var(--text2)">${fmtUSD(cb)}</span>`:'<span class="muted">—</span>'}</td>`,
-            unreal:    `<td>${ur_!==null?`<span class="${ur_>=0?'pos':'neg'}">${fmtUSD(ur_)}</span>`:'<span class="muted">—</span>'}</td>`,
+            costBasis: `<td class="${numbersHidden?'num-hidden':''}">${cb>0?`<span style="color:var(--text2)">${fmtUSD(cb)}</span>`:'<span class="muted">—</span>'}</td>`,
+            unreal:    `<td class="${numbersHidden?'num-hidden':''}">${ur_!==null?`<span class="${ur_>=0?'pos':'neg'}">${fmtUSD(ur_)}</span>`:'<span class="muted">—</span>'}</td>`,
             unrealPct: `<td>${up_!==null?`<span class="${up_>=0?'pos':'neg'}">${up_>=0?'+':''}${up_.toFixed(1)}%</span>`:'<span class="muted">—</span>'}</td>`,
-            mktVal:    `<td>${mv_!==null?`<span style="color:var(--text2)">${fmtUSD(mv_)}</span>`:'<span class="muted">—</span>'}</td>`,
+            mktVal:    `<td class="${numbersHidden?'num-hidden':''}">${mv_!==null?`<span style="color:var(--text2)">${fmtUSD(mv_)}</span>`:'<span class="muted">—</span>'}</td>`,
             weight:    `<td>${wt_!==null?`<span style="color:var(--text2)">${wt_.toFixed(1)}%</span>`:'<span class="muted">—</span>'}</td>`,
-            realized:  `<td class="${gc}">${fmtUSD(s.gain)}</td>`,
+            realized:  `<td class="${gc}${numbersHidden?' num-hidden':''}">${fmtUSD(s.gain)}</td>`,
             days:      `<td class="muted">${s.days>0?s.days:'—'}</td>`,
-            dailyOut:  `<td class="${dc}" style="font-size:.9rem;font-weight:700">${s.days>0?fmtUSD(do_):'—'}</td>`,
+            dailyOut:  `<td class="${dc}${numbersHidden?' num-hidden':''}" style="font-size:.9rem;font-weight:700">${s.days>0?fmtUSD(do_):'—'}</td>`,
             week52:    week52Cell,
             target:    targetCell,
         };
-        const mainRow = `<tr>${colOrder.map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
+        const mainRow = `<tr${isStopAlert?' class="stop-alert"':''}>${colOrder.map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
 
         // 備忘錄展開列
         const noteRowId = `note-row-${item.Symbol}`;
@@ -1714,10 +1729,10 @@ function render() {
                         </div>
                     </div>
                     <div>
-                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">🛑 停損條件</div>
+                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">🛑 停損價格（跌破此價格自動警告）</div>
                         <div style="display:flex;gap:4px">
-                            <input class="input input-sm" id="note-stop-${item.Symbol}" value="${(note.stopLoss||'').replace(/"/g,'&quot;')}"
-                                placeholder="例如：跌破 $150" style="flex:1"
+                            <input class="input input-sm" id="note-stop-${item.Symbol}" value="${note.stopLoss||''}"
+                                placeholder="例如：150" type="number" style="flex:1"
                                 onchange="saveNote('${item.Symbol}')">
                             <button class="btn btn-outline btn-sm" onclick="clearNoteField('${item.Symbol}','stopLoss')" title="清除">✕</button>
                         </div>
@@ -2512,7 +2527,93 @@ function setKPI(id,val,cls) {
     el.innerText=val; el.className='kpi-val '+cls;
 }
 
-// ── Footer ──
+// ══════════════════════════════════════════════════════
+//  數字隱藏
+// ══════════════════════════════════════════════════════
+let numbersHidden = false;
+
+function toggleHideNumbers() {
+    numbersHidden = !numbersHidden;
+    const btn = document.getElementById('hideNumBtn');
+    btn.textContent = numbersHidden ? '👁 顯示數字' : '👁 隱藏數字';
+    btn.style.color = numbersHidden ? '#fbbf24' : '#d1d5db';
+
+    // KPI 遮蔽
+    ['kpiRealized','kpiAvgOutput','kpiUnrealized','kpiMarketValue','kpiDays',
+     'kpiRealizedSub','kpiUnrealizedSub','kpiMarketSub'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('num-hidden', numbersHidden);
+    });
+
+    // 表格遮蔽（重新 render）
+    render();
+}
+
+// ══════════════════════════════════════════════════════
+//  匯出報表 CSV（供 Gemini 分析）
+// ══════════════════════════════════════════════════════
+function exportReport() {
+    if (!inventory.length) { alert('請先匯入持股資料'); return; }
+
+    const today = new Date().toISOString().slice(0,10);
+    const totalMV = inventory.reduce((sum,it)=>{ const p=prices[it.Symbol]; return p?sum+p*parseFloat(it.Shares):sum; },0);
+    const totalCB = inventory.reduce((sum,it)=>sum+parseFloat(it.Cost)*parseFloat(it.Shares),0);
+    const totalUR = totalMV - totalCB;
+    const grandGain = Object.values(stats).reduce((s,v)=>s+v.gain,0);
+    const grandDays = Object.values(stats).reduce((s,v)=>s+v.days,0);
+    const avgOutput = grandDays>0 ? grandGain/grandDays : 0;
+
+    // 帳戶總覽
+    const summary = [
+        `# 獵人追蹤戰情室 分析報表`,
+        `# 匯出時間：${today}`,
+        `# 帳戶：${activeUser}`,
+        ``,
+        `## 帳戶總覽`,
+        `總實現損益,$${grandGain.toFixed(2)}`,
+        `平均日產值,$${avgOutput.toFixed(2)}`,
+        `持股市值,$${totalMV.toFixed(2)}`,
+        `成本基礎,$${totalCB.toFixed(2)}`,
+        `未實現損益,$${totalUR.toFixed(2)}`,
+        `未實現%,${totalCB>0?(totalUR/totalCB*100).toFixed(1):'0'}%`,
+        `現金,$${currentCash.toFixed(2)}`,
+        `總資產,$${(totalMV+currentCash).toFixed(2)}`,
+        ``,
+        `## 持股明細`,
+        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,周轉天數,日均產值,52W低點,52W高點,52W位置%,目標售價,進場理由,停損價`
+    ].join('\n');
+
+    const rows = inventory.map(item => {
+        const s = stats[item.Symbol]||{gain:0,days:0};
+        const p = prices[item.Symbol];
+        const sh = parseFloat(item.Shares), co = parseFloat(item.Cost);
+        const cb = co*sh;
+        const mv = p!==undefined ? p*sh : 0;
+        const ur = p!==undefined ? mv-cb : 0;
+        const up = cb>0 ? (ur/cb*100).toFixed(1) : '—';
+        const wt = totalMV>0 ? (mv/totalMV*100).toFixed(1) : '—';
+        const do_ = s.days>0 ? (s.gain/s.days).toFixed(2) : '0';
+        const w52 = weekData[item.Symbol];
+        const pos52 = (w52 && p) ? ((p-w52.low52)/(w52.high52-w52.low52)*100).toFixed(1) : '—';
+        const note = notes[item.Symbol]||{};
+        return [
+            item.Symbol, sh, co.toFixed(2),
+            p?p.toFixed(2):'—', cb.toFixed(2),
+            ur.toFixed(2), up+'%', mv.toFixed(2), wt+'%',
+            s.gain.toFixed(2), s.days, do_,
+            w52?w52.low52.toFixed(2):'—', w52?w52.high52.toFixed(2):'—', pos52+'%',
+            note.target||'—', note.entryReason||'—', note.stopLoss||'—'
+        ].join(',');
+    }).join('\n');
+
+    const content = summary + '\n' + rows;
+    const filename = `獵人戰情室報表_${activeUser}_${today}.csv`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\uFEFF'+content], {type:'text/csv;charset=utf-8;'}));
+    a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    alert(`已匯出 ${inventory.length} 個標的的報表`);
+}
 function updateFooterTime() {
     document.getElementById('footerTime').innerText=new Date().toLocaleString('zh-TW',{hour12:false});
 }
@@ -2590,7 +2691,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.21',
+        version: 'V4.22',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
