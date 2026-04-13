@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.16</title>
+<title>獵人追蹤戰情室 V4.17</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -328,6 +328,11 @@ input[type=file]::file-selector-button {
 /* ── AI BADGE ── */
 .ai-badge { font-size: 0.65rem; background: var(--purple-l); color: var(--purple); border: 1px solid #ddd6fe; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
 
+/* ── 搜尋下拉 ── */
+.search-dd-item { display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:.82rem; }
+.search-dd-item:last-child { border-bottom:none; }
+.search-dd-item:hover { background:var(--blue-l); }
+
 /* ── 凍結 Symbol 欄 ── */
 .tbl-wrap { overflow-x: auto; }
 .tbl th.col-frozen,
@@ -357,7 +362,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.16</span>
+        <span class="header-ver">V4.17</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -518,9 +523,14 @@ input[type=file]::file-selector-button {
             <div class="card-title">🔍 即時查詢</div>
         </div>
         <div class="card-body">
-            <div class="flex-row">
-                <input class="sym-input" id="searchInput" placeholder="NVDA" maxlength="10"
-                    onkeydown="if(event.key==='Enter') querySingle()">
+            <div class="flex-row" style="position:relative">
+                <div style="position:relative;flex:1;max-width:300px">
+                    <input class="sym-input" id="searchInput" placeholder="輸入 Symbol 或公司名稱" style="width:100%"
+                        oninput="onSearchInput(this.value)"
+                        onkeydown="onSearchKeydown(event)"
+                        autocomplete="off">
+                    <div id="searchDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid var(--border2);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:100;max-height:280px;overflow-y:auto;margin-top:2px"></div>
+                </div>
                 <button class="btn btn-primary" onclick="querySingle()">⚡ 查詢</button>
                 <button class="btn btn-outline btn-sm" onclick="addToWlFromSearch()">＋ 加入 Watchlist</button>
             </div>
@@ -575,26 +585,22 @@ input[type=file]::file-selector-button {
 <div class="page" id="page-filter" style="display:none">
 <div class="wrap">
 
-    <!-- AI 主題搜尋 -->
+    <!-- 篩選池輸入 -->
     <div class="card section-gap">
         <div class="card-header">
-            <div class="card-title">🤖 AI 主題標的搜尋 <span class="ai-badge">Claude AI</span></div>
+            <div class="card-title">📋 篩選池</div>
+            <div class="flex-row">
+                <span style="font-size:.72rem;color:var(--text3)" id="filterPoolInfo">篩選池：0 個標的</span>
+            </div>
         </div>
         <div class="card-body">
-            <div class="flex-row section-gap">
-                <input class="input" id="aiTopicInput" placeholder="輸入主題關鍵字，例如：核能、電力基礎設施、AI伺服器、太空探索..." style="max-width:400px">
-                <button class="btn btn-primary" onclick="aiSearchTheme()">🤖 AI 搜尋</button>
+            <div style="font-size:.75rem;color:var(--text2);margin-bottom:8px">輸入要篩選的 Symbol，用逗號或空格分隔</div>
+            <div class="flex-row">
+                <input class="input" id="filterPoolInput" placeholder="例如：NVDA ASTS RKLB VRT" style="flex:1">
+                <button class="btn btn-primary btn-sm" onclick="loadFilterPoolFromInput()">載入</button>
+                <button class="btn btn-outline btn-sm" onclick="loadFilterPoolFromWatchlist()">從 Watchlist</button>
+                <button class="btn btn-outline btn-sm" onclick="loadFilterPoolFromInventory()">從持股</button>
             </div>
-            <div class="theme-pills section-gap">
-                <span class="tpill" onclick="aiQuickTheme('AI算力半導體')">🤖 AI算力</span>
-                <span class="tpill" onclick="aiQuickTheme('核能電力')">⚛️ 核能</span>
-                <span class="tpill" onclick="aiQuickTheme('太空探索')">🚀 太空</span>
-                <span class="tpill" onclick="aiQuickTheme('電力基礎設施')">⚡ 電力</span>
-                <span class="tpill" onclick="aiQuickTheme('生技基因')">🧬 生技</span>
-                <span class="tpill" onclick="aiQuickTheme('國防航太')">🛡️ 國防</span>
-                <span class="tpill" onclick="aiQuickTheme('ETF指數')">📊 ETF</span>
-            </div>
-            <div id="aiResult"></div>
         </div>
     </div>
 
@@ -659,7 +665,7 @@ input[type=file]::file-selector-button {
             </div>
             <div class="status-row section-gap">
                 <span class="pulse off" id="filterPulse"></span>
-                <span id="filterStatusText">請先用 AI 搜尋或快捷主題載入篩選池</span>
+                <span id="filterStatusText">請先載入篩選池再執行篩選</span>
             </div>
             <div style="overflow-x:auto"><div id="filterTable"></div></div>
         </div>
@@ -750,7 +756,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.16 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.17 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1739,65 +1745,107 @@ function renderWlTable() {
 }
 
 // ══════════════════════════════════════════════════════
-//  AI 主題搜尋
+//  即時查詢搜尋下拉（Yahoo Finance 搜尋 API）
 // ══════════════════════════════════════════════════════
-async function aiSearchTheme() {
-    const topic = document.getElementById('aiTopicInput').value.trim();
-    if (!topic) { alert('請輸入主題關鍵字'); return; }
-    await doAiSearch(topic);
+let searchDebounceTimer = null;
+let searchDropdownActive = -1;
+
+async function onSearchInput(val) {
+    clearTimeout(searchDebounceTimer);
+    const dd = document.getElementById('searchDropdown');
+    if (!val || val.length < 1) { dd.style.display='none'; return; }
+    searchDebounceTimer = setTimeout(async () => {
+        try {
+            const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(val)}&quotesCount=8&newsCount=0&listsCount=0`;
+            const resp = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(5000)});
+            const data = await resp.json();
+            const quotes = (data?.quotes || []).filter(q => q.symbol && (q.quoteType==='EQUITY'||q.quoteType==='ETF'));
+            if (!quotes.length) { dd.style.display='none'; return; }
+            dd.innerHTML = quotes.map((q,i) => `
+                <div class="search-dd-item" data-sym="${q.symbol}" data-idx="${i}"
+                    onclick="selectSearchItem('${q.symbol}')"
+                    onmouseover="searchDropdownActive=${i};highlightSearchItem()">
+                    <span style="font-weight:700;font-family:var(--mono);color:var(--blue);min-width:60px">${q.symbol}</span>
+                    <span style="font-size:.78rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shortname||q.longname||''}</span>
+                    <span style="font-size:.68rem;color:var(--text3);margin-left:auto;flex-shrink:0">${q.exchange||''}</span>
+                </div>`).join('');
+            dd.style.display='block';
+            searchDropdownActive = -1;
+        } catch(e) { dd.style.display='none'; }
+    }, 280);
 }
 
-function aiQuickTheme(topic) {
-    document.getElementById('aiTopicInput').value = topic;
-    doAiSearch(topic);
-}
-
-async function doAiSearch(topic) {
-    const el = document.getElementById('aiResult');
-    el.innerHTML = `<div class="ai-thinking">🤖 Claude 正在搜尋「${topic}」相關的美股標的...</div>`;
-
-    try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 1000,
-                messages: [{
-                    role: 'user',
-                    content: `你是美股投資顧問。請列出與「${topic}」相關的美股標的（美國上市，NYSE/NASDAQ），只給 Symbol，不要說明。格式：每行一個 Symbol，只列 Symbol 代碼，不要其他文字。列出 10-15 個最相關的標的。`
-                }]
-            })
-        });
-        const data = await response.json();
-        const text = data?.content?.[0]?.text || '';
-        // 解析 Symbol（3-5 個大寫字母）
-        const syms = [...new Set(text.match(/\b[A-Z]{1,5}\b/g) || [])].filter(s => s.length >= 1 && s.length <= 5);
-
-        if (!syms.length) {
-            el.innerHTML = `<div class="ai-thinking" style="border-color:var(--red)">⚠ 沒有找到相關標的，請換個關鍵字</div>`;
-            return;
+function onSearchKeydown(e) {
+    const dd = document.getElementById('searchDropdown');
+    const items = dd.querySelectorAll('.search-dd-item');
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        searchDropdownActive = Math.min(searchDropdownActive+1, items.length-1);
+        highlightSearchItem();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        searchDropdownActive = Math.max(searchDropdownActive-1, 0);
+        highlightSearchItem();
+    } else if (e.key === 'Enter') {
+        if (searchDropdownActive >= 0 && items[searchDropdownActive]) {
+            selectSearchItem(items[searchDropdownActive].dataset.sym);
+        } else {
+            querySingle();
         }
-
-        filterPool = syms;
-        document.getElementById('filterPoolInfo').innerText = `篩選池：${syms.length} 個標的（${topic}）`;
-        document.getElementById('filterStatusText').innerText = `AI 找到 ${syms.length} 個標的，點「執行篩選」或直接點標的查詢`;
-
-        el.innerHTML = `
-            <div style="font-size:.75rem;color:var(--text2);margin-bottom:8px">Claude 找到以下相關標的 — 點擊加入 Watchlist</div>
-            <div>${syms.map(s=>`<span class="ai-result-tag" onclick="addToWatchlist('${s}')" title="加入 Watchlist">${s}</span>`).join('')}</div>
-            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn btn-primary btn-sm" onclick="runFilter()">⚡ 對這 ${syms.length} 個標的執行篩選</button>
-                <button class="btn btn-outline btn-sm" onclick="addAllToWatchlist(${JSON.stringify(syms).replace(/"/g,"'")})">全部加入 Watchlist</button>
-            </div>`;
-    } catch(e) {
-        el.innerHTML = `<div class="ai-thinking" style="border-color:var(--red)">⚠ AI 搜尋失敗：${e.message}</div>`;
+        dd.style.display='none';
+    } else if (e.key === 'Escape') {
+        dd.style.display='none';
     }
 }
 
-function addAllToWatchlist(syms) {
-    syms.forEach(s => addToWatchlist(s));
-    alert(`已將 ${syms.length} 個標的加入 Watchlist`);
+function highlightSearchItem() {
+    document.querySelectorAll('.search-dd-item').forEach((el,i) => {
+        el.style.background = i===searchDropdownActive ? 'var(--blue-l)' : '';
+    });
+}
+
+function selectSearchItem(sym) {
+    document.getElementById('searchInput').value = sym;
+    document.getElementById('searchDropdown').style.display='none';
+    querySingle();
+}
+
+// 點擊其他地方關閉下拉
+document.addEventListener('click', e => {
+    if (!e.target.closest('#searchInput') && !e.target.closest('#searchDropdown')) {
+        const dd = document.getElementById('searchDropdown');
+        if (dd) dd.style.display='none';
+    }
+});
+
+// ══════════════════════════════════════════════════════
+//  篩選池管理
+// ══════════════════════════════════════════════════════
+function loadFilterPoolFromInput() {
+    const val = document.getElementById('filterPoolInput').value.trim();
+    if (!val) { alert('請輸入 Symbol'); return; }
+    const syms = [...new Set(val.toUpperCase().split(/[\s,，、]+/).filter(s=>s.length>=1&&s.length<=5))];
+    if (!syms.length) { alert('沒有有效的 Symbol'); return; }
+    filterPool = syms;
+    document.getElementById('filterPoolInfo').innerText = `篩選池：${syms.length} 個標的`;
+    document.getElementById('filterStatusText').innerText = `已載入 ${syms.length} 個標的，點「執行篩選」開始篩選`;
+}
+
+function loadFilterPoolFromWatchlist() {
+    if (!watchlist.length) { alert('Watchlist 是空的'); return; }
+    filterPool = [...watchlist];
+    document.getElementById('filterPoolInput').value = watchlist.join(' ');
+    document.getElementById('filterPoolInfo').innerText = `篩選池：${filterPool.length} 個標的（來自 Watchlist）`;
+    document.getElementById('filterStatusText').innerText = `已從 Watchlist 載入 ${filterPool.length} 個標的`;
+}
+
+function loadFilterPoolFromInventory() {
+    if (!inventory.length) { alert('尚無持股資料'); return; }
+    const syms = inventory.map(i=>i.Symbol);
+    filterPool = syms;
+    document.getElementById('filterPoolInput').value = syms.join(' ');
+    document.getElementById('filterPoolInfo').innerText = `篩選池：${filterPool.length} 個標的（來自持股）`;
+    document.getElementById('filterStatusText').innerText = `已從持股載入 ${filterPool.length} 個標的`;
 }
 
 // ══════════════════════════════════════════════════════
@@ -2376,7 +2424,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.16',
+        version: 'V4.17',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
