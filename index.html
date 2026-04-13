@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.19</title>
+<title>獵人追蹤戰情室 V4.20</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -362,7 +362,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.19</span>
+        <span class="header-ver">V4.20</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -756,7 +756,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.19 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.20 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1160,18 +1160,26 @@ async function refreshPrices() {
     dot.classList.remove('off'); src.textContent='Yahoo Finance'; tm.textContent='查詢中...';
     let fetched=0;
     try {
-        const url   = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=regularMarketPrice,symbol`;
-        const resp  = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(12000)});
+        const url   = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=regularMarketPrice,symbol,fiftyTwoWeekHigh,fiftyTwoWeekLow`;
+        const resp  = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(15000)});
         const body  = await resp.json();
-        (body?.quoteResponse?.result||[]).forEach(q=>{ if(q.regularMarketPrice){prices[q.symbol]=q.regularMarketPrice;fetched++;} });
+        (body?.quoteResponse?.result||[]).forEach(q=>{
+            if(q.regularMarketPrice){ prices[q.symbol]=q.regularMarketPrice; fetched++; }
+            if(q.fiftyTwoWeekHigh && q.fiftyTwoWeekLow){
+                weekData[q.symbol] = { high52: q.fiftyTwoWeekHigh, low52: q.fiftyTwoWeekLow };
+            }
+        });
     } catch(e) {
         for (const sym of syms) {
             try {
                 const url  =`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-                const resp =await fetch(proxyUrl(url),{signal:AbortSignal.timeout(5000)});
+                const resp =await fetch(proxyUrl(url),{signal:AbortSignal.timeout(8000)});
                 const d    =await resp.json();
-                const p    =d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-                if(p){prices[sym]=p;fetched++;}
+                const meta = d?.chart?.result?.[0]?.meta;
+                if(meta?.regularMarketPrice){ prices[sym]=meta.regularMarketPrice; fetched++; }
+                if(meta?.fiftyTwoWeekHigh && meta?.fiftyTwoWeekLow){
+                    weekData[sym] = { high52: meta.fiftyTwoWeekHigh, low52: meta.fiftyTwoWeekLow };
+                }
             } catch(e2){}
             await new Promise(r=>setTimeout(r,180));
         }
@@ -1182,17 +1190,6 @@ async function refreshPrices() {
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
     tm.textContent=`${now} ｜ API ${fetched}/${syms.length}${fb?` ｜ ${fb}筆快取`:''}`;
     src.textContent='Yahoo Finance (15min delay)';
-    // 更新 52週高低點（從 fetchQuotes 的資料取得）
-    try {
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=regularMarketPrice,symbol,fiftyTwoWeekHigh,fiftyTwoWeekLow`;
-        const resp = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(10000)});
-        const body = await resp.json();
-        (body?.quoteResponse?.result||[]).forEach(q=>{
-            if (q.fiftyTwoWeekHigh && q.fiftyTwoWeekLow) {
-                weekData[q.symbol] = { high52: q.fiftyTwoWeekHigh, low52: q.fiftyTwoWeekLow };
-            }
-        });
-    } catch(e) {}
     updateUnrealizedKPI();
     saveCurrentUser(); render();
 }
@@ -2573,7 +2570,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.19',
+        version: 'V4.20',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
