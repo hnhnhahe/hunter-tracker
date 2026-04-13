@@ -46,7 +46,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.20</title>
+<title>獵人追蹤戰情室 V4.21</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -362,7 +362,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.20</span>
+        <span class="header-ver">V4.21</span>
     </div>
     <div class="header-right">
         <button class="btn btn-outline btn-sm" style="background:transparent;color:#d1d5db;border-color:#4b5563" onclick="openBackupModal()">💾 備份/還原</button>
@@ -756,19 +756,23 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.20 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.21 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
 <script>
 // ══════════════════════════════════════════════════════
-//  PROXY 設定 — 使用自己的 Cloudflare Worker
+//  API 設定 — Cloudflare Worker（內含 Finnhub Key）
 // ══════════════════════════════════════════════════════
-const PROXY = 'https://yahoo-proxy.hnhnhahe.workers.dev';
+const WORKER = 'https://yahoo-proxy.hnhnhahe.workers.dev';
 
-function proxyUrl(url) {
-    return `${PROXY}?url=${encodeURIComponent(url)}`;
-}
+// Finnhub endpoint 函數
+function apiQuote(symbols)        { return `${WORKER}/quote?symbols=${symbols.join(',')}`; }
+function apiSearch(q)             { return `${WORKER}/search?q=${encodeURIComponent(q)}`; }
+function apiHistory(sym, from, to){ return `${WORKER}/history?symbol=${sym}&from=${from}&to=${to}`; }
+
+// 舊的 proxyUrl 保留供歷史快照重建使用（Yahoo chart API）
+function proxyUrl(url) { return `${WORKER}?url=${encodeURIComponent(url)}`; }
 //  key, label, align, sortable, frozen(Symbol only)
 // ══════════════════════════════════════════════════════
 const COL_DEFS = [
@@ -1151,45 +1155,46 @@ function refreshKPI(grandGain, grandDays) {
 }
 
 // ══════════════════════════════════════════════════════
-//  LIVE PRICES
+//  LIVE PRICES — Finnhub
 // ══════════════════════════════════════════════════════
 async function refreshPrices() {
     if (!inventory.length) { alert('請先匯入持股資料'); return; }
     const syms = inventory.map(i=>i.Symbol);
     const dot=document.getElementById('pulseDot'), src=document.getElementById('priceSourceTag'), tm=document.getElementById('priceTimeTag');
-    dot.classList.remove('off'); src.textContent='Yahoo Finance'; tm.textContent='查詢中...';
+    dot.classList.remove('off'); src.textContent='Finnhub'; tm.textContent='查詢中...';
     let fetched=0;
+
     try {
-        const url   = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=regularMarketPrice,symbol,fiftyTwoWeekHigh,fiftyTwoWeekLow`;
-        const resp  = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(15000)});
-        const body  = await resp.json();
-        (body?.quoteResponse?.result||[]).forEach(q=>{
-            if(q.regularMarketPrice){ prices[q.symbol]=q.regularMarketPrice; fetched++; }
-            if(q.fiftyTwoWeekHigh && q.fiftyTwoWeekLow){
-                weekData[q.symbol] = { high52: q.fiftyTwoWeekHigh, low52: q.fiftyTwoWeekLow };
+        const resp = await fetch(apiQuote(syms), {signal:AbortSignal.timeout(20000)});
+        const data = await resp.json();
+        (data?.results||[]).forEach(item=>{
+            if (item.price) { prices[item.symbol]=item.price; fetched++; }
+            if (item.high52 && item.low52) {
+                weekData[item.symbol] = { high52: item.high52, low52: item.low52 };
             }
         });
     } catch(e) {
+        // fallback：逐一查詢
         for (const sym of syms) {
             try {
-                const url  =`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-                const resp =await fetch(proxyUrl(url),{signal:AbortSignal.timeout(8000)});
-                const d    =await resp.json();
-                const meta = d?.chart?.result?.[0]?.meta;
-                if(meta?.regularMarketPrice){ prices[sym]=meta.regularMarketPrice; fetched++; }
-                if(meta?.fiftyTwoWeekHigh && meta?.fiftyTwoWeekLow){
-                    weekData[sym] = { high52: meta.fiftyTwoWeekHigh, low52: meta.fiftyTwoWeekLow };
+                const resp = await fetch(`${WORKER}/quote?symbols=${sym}`, {signal:AbortSignal.timeout(8000)});
+                const data = await resp.json();
+                const item = data?.results?.[0];
+                if (item?.price) { prices[sym]=item.price; fetched++; }
+                if (item?.high52 && item?.low52) {
+                    weekData[sym] = { high52: item.high52, low52: item.low52 };
                 }
             } catch(e2){}
-            await new Promise(r=>setTimeout(r,180));
+            await new Promise(r=>setTimeout(r,200));
         }
     }
-    // fallback
+
+    // fallback：用快取
     let fb=0; syms.forEach(s=>{ if(prices[s]===undefined&&initialPricesSnapshot[s]!==undefined){prices[s]=initialPricesSnapshot[s];fb++;} });
     dot.classList.add('off');
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
     tm.textContent=`${now} ｜ API ${fetched}/${syms.length}${fb?` ｜ ${fb}筆快取`:''}`;
-    src.textContent='Yahoo Finance (15min delay)';
+    src.textContent='Finnhub';
     updateUnrealizedKPI();
     saveCurrentUser(); render();
 }
@@ -1728,29 +1733,45 @@ function render() {
 }
 
 // ══════════════════════════════════════════════════════
-//  RADAR: fetchQuotes (共用)
+//  RADAR: fetchQuotes (共用) — Finnhub
 // ══════════════════════════════════════════════════════
 async function fetchQuotes(symbols) {
     const syms=[...new Set(symbols.map(s=>s.trim().toUpperCase()).filter(Boolean))];
     if(!syms.length) return {};
     const result={};
-    const fields='regularMarketPrice,regularMarketChangePercent,regularMarketChange,fiftyTwoWeekHigh,fiftyTwoWeekLow,trailingPE,epsTrailingTwelveMonths,marketCap,regularMarketVolume,shortName';
     try {
-        const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}&fields=${fields}`;
-        const resp=await fetch(proxyUrl(url),{signal:AbortSignal.timeout(12000)});
-        const body=await resp.json();
-        (body?.quoteResponse?.result||[]).forEach(q=>{result[q.symbol]=q;});
-        if(Object.keys(result).length>0) return result;
+        const resp = await fetch(apiQuote(syms), {signal:AbortSignal.timeout(20000)});
+        const data = await resp.json();
+        (data?.results||[]).forEach(item=>{
+            if (item.price) {
+                result[item.symbol] = {
+                    symbol: item.symbol,
+                    regularMarketPrice: item.price,
+                    regularMarketChangePercent: item.changePct||0,
+                    regularMarketChange: item.change||0,
+                    fiftyTwoWeekHigh: item.high52,
+                    fiftyTwoWeekLow:  item.low52,
+                };
+            }
+        });
+        if (Object.keys(result).length > 0) return result;
     } catch(e){}
+    // fallback：逐一查詢
     for(const sym of syms){
         try{
-            const url=`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-            const r=await fetch(proxyUrl(url),{signal:AbortSignal.timeout(5000)});
-            const d=await r.json();
-            const meta=d?.chart?.result?.[0]?.meta;
-            if(meta) result[sym]={symbol:sym,regularMarketPrice:meta.regularMarketPrice,regularMarketChangePercent:meta.regularMarketChangePercent||0,regularMarketChange:0,fiftyTwoWeekHigh:meta.fiftyTwoWeekHigh,fiftyTwoWeekLow:meta.fiftyTwoWeekLow};
+            const resp = await fetch(`${WORKER}/quote?symbols=${sym}`, {signal:AbortSignal.timeout(8000)});
+            const data = await resp.json();
+            const item = data?.results?.[0];
+            if(item?.price) result[sym]={
+                symbol:sym,
+                regularMarketPrice:item.price,
+                regularMarketChangePercent:item.changePct||0,
+                regularMarketChange:item.change||0,
+                fiftyTwoWeekHigh:item.high52,
+                fiftyTwoWeekLow:item.low52,
+            };
         }catch(e2){}
-        await new Promise(r=>setTimeout(r,160));
+        await new Promise(r=>setTimeout(r,200));
     }
     return result;
 }
@@ -1901,18 +1922,17 @@ async function onSearchInput(val) {
     if (!val || val.length < 1) { dd.style.display='none'; return; }
     searchDebounceTimer = setTimeout(async () => {
         try {
-            const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(val)}&quotesCount=8&newsCount=0&listsCount=0`;
-            const resp = await fetch(proxyUrl(url), {signal:AbortSignal.timeout(5000)});
+            const resp = await fetch(apiSearch(val), {signal:AbortSignal.timeout(5000)});
             const data = await resp.json();
-            const quotes = (data?.quotes || []).filter(q => q.symbol && (q.quoteType==='EQUITY'||q.quoteType==='ETF'));
+            const quotes = (data?.result || []).filter(q => q.symbol && q.type==='Common Stock' || q.type==='ETP');
             if (!quotes.length) { dd.style.display='none'; return; }
-            dd.innerHTML = quotes.map((q,i) => `
+            dd.innerHTML = quotes.slice(0,8).map((q,i) => `
                 <div class="search-dd-item" data-sym="${q.symbol}" data-idx="${i}"
                     onclick="selectSearchItem('${q.symbol}')"
                     onmouseover="searchDropdownActive=${i};highlightSearchItem()">
                     <span style="font-weight:700;font-family:var(--mono);color:var(--blue);min-width:60px">${q.symbol}</span>
-                    <span style="font-size:.78rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shortname||q.longname||''}</span>
-                    <span style="font-size:.68rem;color:var(--text3);margin-left:auto;flex-shrink:0">${q.exchange||''}</span>
+                    <span style="font-size:.78rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.description||''}</span>
+                    <span style="font-size:.68rem;color:var(--text3);margin-left:auto;flex-shrink:0">${q.type||''}</span>
                 </div>`).join('');
             dd.style.display='block';
             searchDropdownActive = -1;
@@ -2570,7 +2590,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.20',
+        version: 'V4.21',
         exportTime: new Date().toISOString(),
         users: selected,
         data: {}
