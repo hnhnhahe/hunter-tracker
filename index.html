@@ -3,6 +3,13 @@
 ================================================================================
   DEV_RULES — 獵人追蹤戰情室 開發規範
 ================================================================================
+【修改授權規範】⚠️ 最重要規則，任何程式碼修改，必須等使用者明確說「做」「執行」「改吧」「ok」等授權語才能動手。討論、分析、找問題都可以主動進行，但不得在未獲授權前寫入任何修改。違反此規則視為最嚴重的執行失誤。
+
+【主動審查規範】⚠️ 每次執行修改前，必須主動檢查：
+  1. 同性質的問題是否還有其他地方也存在（舉一反三）
+  2. 相關聯的函數、UI 元件是否需要同步更新
+  3. 發現潛在問題必須主動提出討論，不得等使用者自己撞到才處理
+
 【專案背景】
 - 使用者：17年資歷生管主管，用生管周轉率邏輯管理美股投資
 - 核心指標：日均獲利產值 = 總實現損益 / 總持有天數
@@ -31,12 +38,27 @@
   3. footer HUNTER TRACKING SYSTEM 文字
   4. doBackupExport() 裡的 version 字串
   5. 說明文件 Modal 的版本歷程清單（openHelpModal 附近的 changelog 陣列）
-  格式統一：V主版.次版（如 V4.6）
+  格式統一：V主版.次版.修訂版（如 V4.71 或 V4.81）
   工作檔：/home/claude/獵人追蹤戰情室_V4_0.html
+
+【版本號遞增規則】⚠️ 每次輸出新檔前必須確認版號，同一對話內每次輸出都必須遞增：
+  - 修 bug / 小調整 / UI 微調（不影響功能結構）→ 末兩位 +1
+    例：V4.70 → V4.71 → V4.72
+  - 新增功能 / 改變資料結構 / 新增欄位 → 末兩位 +10
+    例：V4.70 → V4.81
+  - 重大改版 / 架構變動 → 主版 +1
+    例：V4.x → V5.0
+  不得在同一對話輸出相同版號的檔案
 
 【救兵規則】⚠️ 同一個問題嘗試超過兩次仍無法解決：
   必須主動告知使用者「這個問題已嘗試兩次未解決，建議開新對話或尋求其他 AI 協助」
   不得繼續消耗 token 反覆嘗試同一方向
+
+【版本交付盤點規範】⚠️ 每次輸出新版本前，必須主動盤點本版本包含的所有修改：
+  1. 列出「本版本修改清單」：新增了什麼、改了什麼、還原了什麼
+  2. 若本對話中有任何「改錯後補救」的情況，必須在交付訊息中明確列出「已還原：XXX」
+  3. 不得等使用者發現才說，必須主動交代
+  失誤記錄：V4.92 改錯 parseSimpleInventory，V4.96 輸出時未主動提及已還原
 
 【隱藏數字規範】⚠️ 每次新增任何顯示金額或百分比的 UI 元件，必須確認：
   1. 靜態元件：ID 加入 toggleHideNumbers() 的遮蔽清單
@@ -44,6 +66,83 @@
      若為 true 則用 <span class="num-hidden"> 包住，或整個區塊用 blur CSS
   3. Canvas 圖表：在 fillText 前加 if (!numbersHidden) 判斷
   4. Tooltip：snapTooltipMove 等函數內，金額顯示前檢查 numbersHidden
+
+【新增欄位規範】⚠️ 每次新增任何欄位或資料結構，必須同步確認以下三個地方：
+  1. clearAllData() — 清除設定要包含新欄位的重置
+  2. doBackupExport() / doBackupRestore() — 備份檔要包含新欄位的匯出和還原
+  3. 版本號同步更新（依照版本管理規範）
+
+【新增 KPI／周轉表欄位規範】⚠️ 每次新增 KPI 或周轉表欄位，必須同步確認以下兩個地方：
+  1. CSV 匯出報表 — 新增對應欄位和標題
+  2. 標題文字 — CSV 報表標題跟介面標題保持一致
+  3. 若欄位需要排序，計算函數必須定義在全域（不可放在 render() 內部），才能讓 getVal() 呼叫
+
+【改版備註規範】⚠️ 每次修改程式碼，必須在修改處加上備註，格式如下：
+  // [Vx.xx] 改版說明 — 修改內容簡述
+  // 原因：為什麼要改
+  // 影響範圍：哪些功能/欄位受影響
+  新增功能 → 在新增處標註
+  修改現有邏輯 → 在修改處標註，並保留舊邏輯的註解說明原本是什麼
+  刪除邏輯 → 不直接刪除，先註解掉並標註原因，確認穩定後再清除
+
+【resetUIState 規範】⚠️ 每次修改 resetUIState() 新增清除項目時，必須同步確認：
+  1. loadCurrentUser() 的無資料分支（else）是否也需要同步清除該元素
+  2. 兩邊不同步會導致：切換到無資料帳戶或新增帳戶時，畫面殘留上一個帳戶的內容
+  失誤記錄：V4.80 重構後未同步，V4.84 逐項補仍有遺漏，V4.85 根本解法：無資料分支直接呼叫 resetUIState()
+
+【clearAllData 規範】⚠️ clearAllData() 必須同步處理以下五件事：
+  1. 重置所有資料變數（inventory、stats、posSnapshots 等）
+  2. 重置所有 UI 狀態（輸入框、狀態文字、面板顯示）
+  3. 呼叫所有相關的 init 函數（如 initYtdBaseUI()）確保 UI 與資料同步
+  4. 呼叫 resetFileInputs() 清除 file input 殘留顯示
+  5. 清除 txnStatus 文字、隱藏 buildSnapshotBtn
+
+【clearAllData 重構待辦】⚠️ 下次開新對話第一件事：重構 clearAllData()
+  目標：把分散的清除邏輯集中，避免新增功能時遺漏
+  做法：
+    function clearDataVariables()  → 所有資料變數重置集中在這
+    function resetUIState()        → 所有 UI 重置集中在這（含 txnStatus、buildBtn 等）
+    function clearAllData() {
+        if (!confirm(...)) return;
+        clearLocalStorage();
+        clearDataVariables();
+        resetUIState();       ← 取代現在散落各處的 UI 重置
+        resetFileInputs();
+        checkImportLock();
+        updateCustomBtnStatus();
+        selfCheck(); render(); renderTrend();
+        diagBar.innerHTML = '已清除全部資料';
+    }
+  注意：resetUIState() 必須包含目前 clearAllData 和 loadCurrentUser 裡所有 UI 同步邏輯
+
+【下次對話待研究】成本基礎差異分析
+  現象：同一份資料，嘉信版入口 vs 通用版入口建出的快照成本基礎有差異
+  已知：兩版 inventory Cost 相同、txnData 日期範圍相同（2022-04-28 ~ 2026-04-16）
+  差異根源：嘉信版缺少 Stock Split 記錄（V4.75 已修），但修後仍有小差異待確認
+  分析方向：
+    1. console 確認兩版 buildDailyHoldings() 最後一天的 avgCost 是否還有差
+    2. 若有差，找出是哪支股票、哪筆交易造成
+    3. 確認嘉信版 handleTxnFile 的 validActions 是否還有遺漏的 action 類型
+
+【下次對話待修清單】
+  - 新帳戶切換 KPI 污染 bug（V4.96 根本修復，Console trace 確認）
+    現象：A帳有資料 → 新增B帳 → 切換A帳再切回B帳 → B帳顯示A帳KPI數字
+    根本原因：loadCurrentUser() 的 if(raw) 分支只載入資料、不清畫面
+      - 新增B帳時 switchUser 存了空的 hunter_B_data
+      - 切回B帳時走 if(raw) 分支，不呼叫 resetUIState()
+      - KPI DOM 殘留 A 帳數字，render() 只清表格不清 KPI
+    修法（V4.96）：resetUIState() 移到 if/else 之前，每次 loadCurrentUser 都先清畫面
+    附加修法（V4.90）：refreshPrices / buildSnapshotsFromTxn async race condition 保護
+
+【嘉信匯入三入口規範】⚠️ 以下三個函數是嘉信版的獨立入口，每次修改「匯入完成後必做動作」時，
+  必須同時確認三個地方都有更新，缺一不可：
+  1. parseSchwabPositions()  — ① 初始持股
+  2. handleStatementFile()   — ② 已實現損益
+  3. handleTxnFile()         — ③ 交易紀錄
+  目前「匯入完成後必做」清單：
+  - saveCurrentUser()
+  - checkImportLock()   ← 確保通用版 ④⑤⑥ 正確 disable
+  新增任何「匯入後必做」動作時，必須在這三個函數結尾都加上。
 
 【功能狀態 V4.0】
   ✅ 白底配色（參考生管排程工作站）
@@ -58,7 +157,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.63</title>
+<title>獵人追蹤戰情室 V4.96</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -142,6 +241,10 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', '
 .user-bar {
     background: #374151; border-bottom: 1px solid #4b5563;
     padding: 6px 24px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    /* [V4.64] user-bar sticky 固定 — 桌機版 top:52px(header高度) */
+    /* 原因：捲動時帳戶列消失，使用者無法快速切換帳戶 */
+    /* 影響範圍：user-bar、page-tabs top 值需同步調整 */
+    position: sticky; top: 52px; z-index: 195;
 }
 .user-label { color: #9ca3af; font-size: 0.72rem; }
 .user-btn {
@@ -159,7 +262,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', '
     .header { padding: 0 12px; }
     .header-right .btn-desktop-only { display: none; }
     .wrap { padding: 12px; }
-    .user-bar { padding: 6px 12px; gap: 6px; }
+    /* [V4.64] 手機版 user-bar sticky — top 由 JS 動態計算，此處只設基礎 */
+    /* 原因：手機版 user-bar 帳戶多時會換行，高度不固定，無法寫死 top 值 */
+    .user-bar { padding: 6px 12px; gap: 6px; top: 52px; }
 
     /* 數據源管理手機版改單欄 */
     .two-col { grid-template-columns: 1fr !important; gap: 10px !important; }
@@ -215,7 +320,10 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', '
 /* ── PAGE TABS ── */
 .page-tabs {
     background: white; border-bottom: 1px solid var(--border);
-    padding: 0 24px; display: flex; position: sticky; top: 52px; z-index: 190;
+    /* [V4.64] top 值從 52px 改為 88px — header(52) + user-bar(36) */
+    /* 原因：user-bar 改為 sticky 後，page-tabs 需往下推避免重疊 */
+    /* 影響範圍：桌機版 page-tabs 定位 */
+    padding: 0 24px; display: flex; position: sticky; top: 88px; z-index: 190;
     box-shadow: var(--shadow);
 }
 .page-tab {
@@ -423,15 +531,17 @@ input[type=file]::file-selector-button {
 .search-dd-item:hover { background:var(--blue-l); }
 
 /* ── 凍結 Symbol 欄 ── */
-.tbl-wrap { overflow-x: auto; }
-.tbl th.col-frozen,
+.tbl-wrap { overflow-x: auto; overflow-y: auto; max-height: 520px; }
+/* [V4.69] 標題列 sticky — 表格固定高度，標題不隨捲動消失 */
+.tbl thead th { position: sticky; top: 0; z-index: 2; background: #f9fafb; }
 .tbl td.col-frozen {
     position: sticky; left: 0; z-index: 2;
     background: white;
     border-right: 2px solid var(--border2);
     box-shadow: 2px 0 4px rgba(0,0,0,0.06);
 }
-.tbl thead th.col-frozen { background: #f9fafb; z-index: 3; }
+/* col-frozen 在 thead 裡需要同時 sticky top 和 sticky left，z-index 最高 */
+.tbl thead th.col-frozen { position: sticky; top: 0; left: 0; z-index: 5; background: #f9fafb; }
 
 /* ── 拖拉欄位 ── */
 .tbl th.sortable { cursor: pointer; user-select: none; }
@@ -471,6 +581,81 @@ input[type=file]::file-selector-button {
 .backup-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .backup-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.82rem; }
 .backup-item input[type=checkbox] { accent-color: var(--blue); width: 16px; height: 16px; }
+
+/* ── [V4.70] 通用 CSV 匯入 ── */
+/* 原因：支援 Schwab 以外券商的 CSV 欄位對應匯入 */
+.custom-import-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border2);
+}
+.custom-import-lock {
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+}
+.custom-import-lock-msg {
+    font-size: .72rem; color: var(--text3);
+    padding: 6px 10px; background: var(--bg); border-radius: 4px;
+    border: 1px solid var(--border); margin-bottom: 8px;
+    display: none;
+}
+.schwab-lock-msg {
+    font-size: .72rem; color: var(--text3);
+    padding: 6px 10px; background: var(--bg); border-radius: 4px;
+    border: 1px solid var(--border); margin-bottom: 8px;
+    display: none;
+}
+.csv-import-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; border: 1px dashed var(--border2);
+    background: white; color: var(--text2); transition: all 0.15s;
+    white-space: nowrap;
+}
+.csv-import-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-l); }
+.csv-import-btn.has-data { border-style: solid; border-color: var(--green); color: var(--green); background: var(--green-l); }
+
+/* 欄位對應 UI */
+.field-mapper { display: flex; flex-direction: column; gap: 8px; }
+.field-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; background: var(--bg); border-radius: 6px;
+    border: 1px solid var(--border);
+}
+.field-label { font-size: .78rem; font-weight: 600; color: var(--text); min-width: 130px; }
+.field-required { color: var(--red); font-size: .65rem; margin-left: 2px; }
+.field-select {
+    flex: 1; padding: 5px 8px; border: 1px solid var(--border2); border-radius: 5px;
+    font-size: .78rem; background: white; color: var(--text);
+}
+.field-select:focus { outline: none; border-color: var(--blue); }
+
+/* 步驟指示器 */
+.import-steps {
+    display: flex; gap: 0; margin-bottom: 20px;
+    border-radius: 6px; overflow: hidden; border: 1px solid var(--border);
+}
+.import-step {
+    flex: 1; padding: 8px 4px; text-align: center;
+    font-size: .7rem; color: var(--text3); background: var(--bg);
+    border-right: 1px solid var(--border);
+}
+.import-step:last-child { border-right: none; }
+.import-step.active { background: var(--blue); color: white; font-weight: 700; }
+.import-step.done { background: var(--green-l); color: var(--green); }
+
+/* 預覽表格 */
+.preview-table-wrap { overflow-x: auto; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.preview-tbl { width: 100%; border-collapse: collapse; font-size: .75rem; }
+.preview-tbl th { padding: 6px 10px; background: #f9fafb; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; font-size: .68rem; color: var(--text2); }
+.preview-tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.preview-tbl tr:last-child td { border-bottom: none; }
+
+/* 格式儲存 */
+.format-save-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--yellow-l); border: 1px solid #fde68a; border-radius: 6px; margin-top: 10px; flex-wrap: wrap; }
+.format-save-row input { flex: 1; padding: 5px 8px; border: 1px solid #fcd34d; border-radius: 5px; font-size: .78rem; }
+.import-summary { font-size: .78rem; line-height: 1.8; padding: 10px 12px; background: var(--green-l); border: 1px solid #bbf7d0; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -479,7 +664,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.63</span>
+        <span class="header-ver">V4.96</span>
     </div>
     <div class="header-right">
         <!-- 手機和電腦都顯示 -->
@@ -551,7 +736,7 @@ input[type=file]::file-selector-button {
                         style="width:70px;padding:3px 8px;border:1px solid var(--border2);border-radius:4px;font-size:.78rem;cursor:pointer"
                         readonly onclick="openNumpad('annualGoalPct')">
                     <span style="font-size:.72rem;color:var(--text2)">%</span>
-                    <button class="btn btn-outline btn-sm" onclick="clearAnnualGoal()" title="清除目標">✕</button>
+                    <button class="btn btn-outline btn-sm" onclick="clearAnnualGoal();saveCurrentUser()" title="清除目標">✕</button>
                 </div>
             </div>
         </div>
@@ -642,22 +827,25 @@ input[type=file]::file-selector-button {
         <div class="card-body collapsible-body">
             <div class="two-col section-gap">
                 <div>
-                    <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">① 初始持股 — Schwab Positions CSV 或自製 CSV（Symbol/Shares/Cost）</div>
+                    <div style="font-size:.75rem;color:var(--text2);margin-bottom:4px;font-weight:600">① 初始持股 — Schwab Positions CSV 或自製 CSV（Symbol/Shares/Cost）</div>
+                    <div style="font-size:.68rem;color:var(--text3);margin-bottom:6px">查看現持股狀況、KPI、即時股價更新</div>
                     <div class="flex-row">
                         <input type="file" id="inventoryFile" accept=".csv,.xlsx" onchange="handleInventoryFile(this)">
                     </div>
                 </div>
                 <div>
-                    <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">② 已實現損益 — Schwab GainLoss_Realized_Details_xxxx.csv</div>
+                    <div style="font-size:.75rem;color:var(--text2);margin-bottom:4px;font-weight:600">② 已實現損益 — Schwab GainLoss_Realized_Details_xxxx.csv</div>
+                    <div style="font-size:.68rem;color:var(--text3);margin-bottom:6px">查看獲利記錄、趨勢報表、標的歷史損益</div>
                     <div class="flex-row">
                         <input type="file" id="statementFile" accept=".csv" onchange="handleStatementFile(this)">
                     </div>
                 </div>
             </div>
             <div style="margin-bottom:14px">
-                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;font-weight:600">③ 交易紀錄 — Schwab Transactions CSV（用於重建歷史持倉快照）
+                <div style="font-size:.75rem;color:var(--text2);margin-bottom:4px;font-weight:600">③ 交易紀錄 — Schwab Transactions CSV（用於重建歷史持倉快照）
                     <span id="txnStatus" style="font-weight:400;color:var(--text3);margin-left:8px"></span>
                 </div>
+                <div style="font-size:.68rem;color:var(--text3);margin-bottom:6px">重建歷史資產快照與趨勢圖（參考用）。同時匯入①可在重建前自動驗證股數正確性。<br>⚠️ 持股曾有股票分割者，請確認分割欄位已正確對應</div>
                 <div class="flex-row">
                     <input type="file" id="txnFile" accept=".csv" onchange="handleTxnFile(this)">
                 </div>
@@ -691,6 +879,41 @@ input[type=file]::file-selector-button {
                 <span class="source-tag" id="priceSourceTag">來源: —</span>
                 <span id="priceTimeTag" style="color:var(--text3)">尚未更新｜請使用上方「⚡ 全股價」更新</span>
             </div>
+
+            <!-- [V4.70] 通用 CSV 匯入 ④⑤⑥ — Schwab 以外券商使用 -->
+            <!-- 原因：支援 Firstrade / TD / 凱基等券商自訂格式匯入 -->
+            <!-- 影響範圍：inventory、stats、rawTrades（帶 source 欄位） -->
+            <div class="custom-import-section" id="customImportSection">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                    <span style="font-size:.78rem;font-weight:700;color:var(--text2)">🔧 通用 CSV 匯入（其他券商）</span>
+                    <span style="font-size:.68rem;color:var(--text3)">Firstrade / TD / 凱基 等</span>
+                </div>
+                <div id="schwabLockMsg" class="schwab-lock-msg">
+                    ⚠️ 已匯入 Schwab 資料（①②③），通用匯入已鎖定。如需使用通用版，請先清除所有資料。
+                </div>
+                <div id="customImportWrap">
+                    <div style="font-size:.68rem;color:var(--text3);margin-bottom:8px;line-height:1.6">
+                        ④ 持倉：查看現持股狀況、KPI、即時股價 ／
+                        ⑤ 損益：查看獲利記錄、趨勢報表 ／
+                        ⑥ 交易紀錄：重建歷史快照（參考用，選填）。同時匯入④可驗證股數正確性。
+                    </div>
+                    <div class="flex-row" style="flex-wrap:wrap;gap:10px">
+                        <button class="csv-import-btn" id="btnCustomPos" onclick="openCsvImportModal('positions')">
+                            <span>④</span> 自訂持倉
+                            <span id="customPosStatus" style="font-size:.65rem"></span>
+                        </button>
+                        <button class="csv-import-btn" id="btnCustomGL" onclick="openCsvImportModal('gainloss')">
+                            <span>⑤</span> 自訂已實現損益
+                            <span id="customGLStatus" style="font-size:.65rem"></span>
+                        </button>
+                        <button class="csv-import-btn" id="btnCustomTxn" onclick="openCsvImportModal('txn')">
+                            <span>⑥</span> 自訂交易紀錄 <span style="color:var(--text3);font-size:.68rem">（選填）</span>
+                            <span id="customTxnStatus" style="font-size:.65rem"></span>
+                        </button>
+                    </div>
+                    <div id="customDiagBar" style="margin-top:8px"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -717,17 +940,24 @@ input[type=file]::file-selector-button {
 
 <!-- ── 說明文件 MODAL ── -->
 <div class="modal-backdrop" id="helpModal" style="display:none">
-<div class="modal" style="max-width:640px;max-height:80vh;overflow-y:auto">
-    <h3>📖 獵人追蹤戰情室 使用說明</h3>
+<div class="modal" style="max-width:640px;height:85vh;max-height:85vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
 
-    <div style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="helpTabs">
+    <!-- [V4.69] 固定頂部：標題 + 頁籤 + 關閉按鈕 -->
+    <div style="padding:20px 24px 0;flex-shrink:0;background:white;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="margin:0;font-size:1rem">📖 獵人追蹤戰情室 使用說明</h3>
+            <button class="btn btn-outline btn-sm" onclick="closeHelpModal()" style="flex-shrink:0">✕ 關閉</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:12px" id="helpTabs">
             <button class="snap-range-btn active" onclick="switchHelpTab('guide')">📋 使用流程</button>
             <button class="snap-range-btn" onclick="switchHelpTab('metrics')">📊 指標說明</button>
             <button class="snap-range-btn" onclick="switchHelpTab('risk')">⚠️ 注意事項</button>
             <button class="snap-range-btn" onclick="switchHelpTab('changelog')">📝 版本歷程</button>
         </div>
     </div>
+
+    <!-- 內容區域：內部捲動 -->
+    <div style="flex:1;overflow-y:auto;padding:20px 24px">
 
     <!-- 使用流程 -->
     <div id="helpTab-guide">
@@ -738,7 +968,7 @@ input[type=file]::file-selector-button {
             <div>3. 如有停損警告（紅色列）請留意</div>
         </div>
 
-        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">💼 有交易時的更新流程</div>
+        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">💼 Schwab 有交易時的更新流程</div>
         <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
             <div>1. Schwab → Accounts → Positions → Export → 下載 <code>Individual-Positions-xxxx.csv</code></div>
             <div>2. 展開「🧬 數據源管理」→ ① 初始持股，匯入 Positions CSV</div>
@@ -746,13 +976,77 @@ input[type=file]::file-selector-button {
             <div>4. ② 已實現損益，匯入 GainLoss CSV</div>
             <div>5. Schwab → History → Transactions → Export（選全部時間範圍）→ 下載 <code>Individual_XXX_Transactions_xxxx.csv</code></div>
             <div>6. ③ 交易紀錄，匯入 Transactions CSV（備用，重建時才需要）</div>
-            <div>7. 點 <strong>⚡ 全股價</strong> 更新股價</div>
+            <div>7. 匯入 ① 後 KPI 即自動顯示（使用 CSV 內的股價）</div>
+            <div>8. 點 <strong>⚡ 全股價</strong> 可更新成今日即時股價（Finnhub，約15分鐘延遲）</div>
+        </div>
+
+        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">🔧 其他券商（Firstrade / TD / 凱基等）匯入流程</div>
+        <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
+            <div>1. 從你的券商後台匯出持倉 CSV、已實現損益 CSV（交易紀錄選填）</div>
+            <div>2. 展開「🧬 數據源管理」→ 下方「🔧 通用 CSV 匯入」區塊</div>
+            <div>3. 點 <strong>④ 自訂持倉</strong>，上傳持倉 CSV</div>
+            <div>4. 系統自動偵測標頭行（跳過券商帳戶描述列），顯示欄位對應畫面</div>
+            <div>5. 如有已存格式（上次用過）→ 點選格式按鈕一鍵帶入，確認後下一步</div>
+            <div>6. 首次使用 → 手動對應每個欄位（參考右側 Schwab 欄位名稱作為對照）</div>
+            <div>7. 預覽前三筆確認正確 → 確認匯入</div>
+            <div>8. 完成後可命名儲存格式範本，下次同格式不需重新對應</div>
+            <div>9. 同樣流程操作 <strong>⑤ 自訂已實現損益</strong>，⑥ 交易紀錄選填</div>
+            <div>10. 若持倉 CSV 有現價欄且已對應，匯入後 KPI 即顯示；無現價欄則需點 <strong>⚡ 全股價</strong></div>
+            <div style="color:#d97706;margin-top:6px">📌 格式範本存在 localStorage，備份 JSON 時會一起帶走，換裝置還原後依然可用</div>
+            <div style="color:#d97706">📌 Schwab ①②③ 與通用 ④⑤⑥ 互斥，同一帳戶只能用一種入口</div>
+        </div>
+
+        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">⚖️ Schwab 版 vs 通用版差異</div>
+        <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
+            <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+                <thead>
+                    <tr style="background:#f3f4f6">
+                        <th style="padding:6px 10px;text-align:left;border:1px solid var(--border)">項目</th>
+                        <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Schwab 版 ①②③</th>
+                        <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">通用版 ④⑤⑥</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding:6px 10px;border:1px solid var(--border)">匯入方式</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">直接上傳，自動解析</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">上傳後手動對應欄位</td>
+                    </tr>
+                    <tr style="background:#f9fafb">
+                        <td style="padding:6px 10px;border:1px solid var(--border)">股價來源</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">CSV 內含，匯入即顯示 KPI</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">現價欄選填，無則需 ⚡ 全股價</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:6px 10px;border:1px solid var(--border)">股價備用快取</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">✅ 自動存入</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">✅ 有填現價欄則存入</td>
+                    </tr>
+                    <tr style="background:#f9fafb">
+                        <td style="padding:6px 10px;border:1px solid var(--border)">Stock Split 支援</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">✅ 自動識別</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">✅ 欄位對應後支援</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:6px 10px;border:1px solid var(--border)">格式範本儲存</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">—（固定格式）</td>
+                        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border)">✅ 可命名儲存，下次直接套用</td>
+                    </tr>
+                    <tr style="background:#f9fafb">
+                        <td style="padding:6px 10px;border:1px solid var(--border)">互斥限制</td>
+                        <td colspan="2" style="padding:6px 10px;text-align:center;border:1px solid var(--border);color:#d97706">同一帳戶只能用一種入口，不可混用</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
         </div>
 
         <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">💾 定期備份建議</div>
         <div style="font-size:.82rem;color:var(--text);line-height:1.8">
             <div>• 每週至少備份一次：點「⋯ 更多」→「💾 備份/還原」→「匯出」</div>
             <div>• 有重大交易後立即備份</div>
+            <div>• 備份 JSON 包含帳戶資料、欄位順序、Watchlist、CSV 格式範本</div>
             <div>• 備份 JSON 檔請妥善保存，遺失無法恢復</div>
         </div>
     </div>
@@ -763,61 +1057,114 @@ input[type=file]::file-selector-button {
         <div style="display:flex;flex-direction:column;gap:10px">
 
             <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📊 日均產值</div>
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📊 歷史日均產值</div>
                 <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>累積所有交易的總實現損益 ÷ 累積總持有天數</div>
-                    <div><strong>含意：</strong>從開始持有至今，平均每天產生多少獲利</div>
-                    <div style="color:#ef4444;margin-top:4px">⚠ 持有越久天數越大，分母膨脹導致數值被稀釋，不同持有期的標的無法公平比較</div>
+                    <div><strong>公式：</strong>該標的累積實現損益 ÷ 累計佔用天數</div>
+                    <div><strong>累計佔用天數：</strong>每筆交易的（賣出日 - 買入日），全部加總</div>
+                    <div><strong>含意：</strong>這個標的從開始操作至今，平均每天貢獻多少實現損益</div>
+                    <div style="color:#ef4444;margin-top:4px">⚠ 標的操作越久、天數越大，分母膨脹導致數值被稀釋，不同操作期的標的無法直接公平比較</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">🔵 現役天數</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>公式：</strong>今天 - 本輪最早買入日</div>
+                    <div><strong>本輪定義：</strong>找出所有買入日期中，比最後一次賣出日期還要晚的最早買入日。若從未賣出，則從第一次買入起算。</div>
+                    <div><strong>含意：</strong>目前這一輪持倉已佔用資金幾天，反映現役資金的壓用時間</div>
+                    <div style="color:#d97706;margin-top:4px">📌 若從未賣出，現役天數 = 從第一次買入至今的總天數</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">🔵 現役日均產值</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>公式：</strong>本輪已實現損益 ÷ 現役天數</div>
+                    <div><strong>本輪已實現損益：</strong>買入日期 ≥ 本輪起算日的所有交易損益加總</div>
+                    <div><strong>含意：</strong>這一輪持倉週期內，平均每天已產生多少實現損益</div>
+                    <div style="color:#d97706;margin-top:4px">📌 若本輪尚未賣出任何批次，本輪已實現損益為 0，現役日均產值為 0</div>
                 </div>
             </div>
 
             <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
                 <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">🔄 滾動日均產值（近365天）</div>
                 <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>最後更新股價日期往回推365天內的已實現損益 ÷ 365</div>
-                    <div><strong>含意：</strong>近一年這個標的平均每天幫你賺多少錢，分母固定365天</div>
-                    <div><strong>優點：</strong>所有標的基準相同，可公平橫向比較，更能反映當前產線效能</div>
-                    <div style="color:#d97706;margin-top:4px">📌 若某標的近一年沒有賣出紀錄，滾動日均產值為 0，代表近一年無實質產值貢獻</div>
+                    <div><strong>公式：</strong>近365天內（賣出日在今天往前推一年）已實現損益加總 ÷ 365</div>
+                    <div><strong>分母固定：</strong>永遠是 365，不受操作年資影響</div>
+                    <div><strong>含意：</strong>近一年這個標的平均每天幫你賺多少錢</div>
+                    <div><strong>優點：</strong>所有標的分母相同，可直接橫向比較，反映當前真實產線效能</div>
+                    <div style="color:#d97706;margin-top:4px">📌 近一年無賣出紀錄 → 滾動日均產值為 0，代表近一年無實質產值貢獻</div>
                 </div>
             </div>
 
             <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
                 <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">📈 產值貢獻%</div>
                 <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>該標的滾動日均產值 ÷ 全場滾動日均產值總和 × 100%</div>
+                    <div><strong>公式：</strong>該標的滾動日均產值 ÷ 全場所有持股滾動日均產值總和 × 100%</div>
                     <div><strong>含意：</strong>這個標的佔整體產線產出的比重</div>
-                    <div><strong>判讀：</strong>與「持股占比%」對比</div>
-                    <div style="color:var(--green);margin-top:2px">🟢 產值貢獻% > 持股占比% → 高效標的，資金使用效率高</div>
-                    <div style="color:#ef4444">🔴 產值貢獻% &lt; 持股占比% → 低效佔資，資金被壓住但沒有對應產出</div>
+                    <div><strong>判讀：</strong>與「持股占比%」對比，找出資金效率差異</div>
+                    <div style="color:var(--green);margin-top:4px">🟢 產值貢獻% > 持股占比% → 高效標的，用少量資金貢獻大量產值</div>
+                    <div style="color:#ef4444">🔴 產值貢獻% &lt; 持股占比% → 低效佔資，資金壓住但產值不足</div>
+                    <div style="color:#d97706;margin-top:4px">📌 全場滾動產值總和為 0 時（所有標的近一年無賣出）不顯示</div>
                 </div>
             </div>
 
             <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
                 <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">💹 總日均產值（含未實現）</div>
                 <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>（累積實現損益 + 目前未實現損益）÷ 累積持有天數</div>
-                    <div><strong>含意：</strong>把帳面獲利也算進去，反映含浮盈的整體持倉效率</div>
-                    <div><strong>注意：</strong>需要更新股價後才會顯示，隨股價波動</div>
+                    <div><strong>公式：</strong>（該標的累積實現損益 + 目前未實現損益）÷ 累計佔用天數</div>
+                    <div><strong>未實現損益：</strong>（即時股價 - 均成本）× 股數</div>
+                    <div><strong>含意：</strong>假設今天全部出場，含浮盈的整體操作效率</div>
+                    <div style="color:#d97706;margin-top:4px">📌 需更新股價後才會顯示，隨股價即時波動</div>
                 </div>
             </div>
 
             <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📅 年初至今 YTD%</div>
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📊 未實現損益 / 未實現%</div>
                 <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>（目前總資產 - 年初總資產）÷ 年初總資產 × 100%</div>
-                    <div><strong>含意：</strong>從今年第一個有記錄的日期至今，整體帳戶的資產成長率</div>
-                    <div><strong>包含：</strong>持股市值變化 + 現金 + 已實現損益，反映帳戶真實財富變化</div>
-                    <div><strong>自動扣除：</strong>從 Transactions CSV 自動識別 Wire Received 和 Journal 的今年淨流入，修正外部入金的影響</div>
-                    <div style="color:#d97706;margin-top:4px">📌 需匯入 Transactions CSV 才能自動扣除入金，否則 YTD% 可能偏高</div>
+                    <div><strong>未實現損益公式：</strong>（即時股價 - 均成本）× 持股股數</div>
+                    <div><strong>未實現% 公式：</strong>未實現損益 ÷ 成本基礎 × 100%</div>
+                    <div><strong>成本基礎：</strong>均成本 × 持股股數</div>
+                    <div><strong>含意：</strong>若今天出場，帳面浮盈或浮虧的金額與報酬率</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">⚖️ 持股占比%</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>公式：</strong>該標的市值 ÷ 全場總市值 × 100%</div>
+                    <div><strong>市值：</strong>即時股價 × 持股股數</div>
+                    <div><strong>含意：</strong>該標的佔整體持股市值的比重，反映資金集中度</div>
+                    <div style="color:#d97706;margin-top:4px">📌 需更新股價後才能正確計算</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📅 YTD%（年初至今總資產成長率）</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>公式：</strong>（目前總資產 - 調整後年初總資產）÷ 調整後年初總資產 × 100%</div>
+                    <div><strong>目前總資產：</strong>持股總市值 + 現金餘額</div>
+                    <div><strong>調整後年初總資產：</strong>年初快照總資產 + 今年外部淨入金</div>
+                    <div><strong>外部入金識別：</strong>從 Transactions CSV 自動抓取今年 Wire Received 和 Journal 類型金額</div>
+                    <div><strong>含意：</strong>扣除外部入金影響後，帳戶真實投資成長率</div>
+                    <div style="color:#d97706;margin-top:4px">📌 可在「📐 YTD 基準值校正」面板手動輸入年初資產與嘉信對齊</div>
                 </div>
             </div>
 
             <div style="padding:10px 12px;background:#fffbeb;border-radius:6px;border-left:4px solid #d97706">
-                <div style="font-weight:700;font-size:.82rem;color:#d97706;margin-bottom:4px">⚠ 呆滯料預警</div>
+                <div style="font-weight:700;font-size:.82rem;color:#d97706;margin-bottom:4px">⚠ 呆滯料預警（列變黃）</div>
                 <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>觸發條件：</strong>周轉天數 > 30 天 且 未實現% 介於 -2% ~ +2%</div>
+                    <div><strong>觸發條件：</strong>累計佔用天數 > 30 天 且 未實現% 介於 -2% ~ +2%</div>
                     <div><strong>含意：</strong>資金被壓住超過一個月，但股價橫盤不動，類似工廠的呆滯庫存</div>
-                    <div><strong>建議：</strong>評估是否減倉釋放資金投入高效標的</div>
+                    <div><strong>建議：</strong>評估是否減倉，釋放資金投入高效標的</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#fef2f2;border-radius:6px;border-left:4px solid #ef4444">
+                <div style="font-weight:700;font-size:.82rem;color:#ef4444;margin-bottom:4px">🚨 停損警告（列變紅）</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>觸發條件：</strong>未實現% &lt; 設定的停損百分比（在備忘錄裡設定）</div>
+                    <div><strong>含意：</strong>浮虧已超過自設停損線，提醒注意風險</div>
                 </div>
             </div>
 
@@ -837,7 +1184,8 @@ input[type=file]::file-selector-button {
         <div style="font-weight:700;margin-bottom:8px;color:var(--red)">⚠️ 資料存放說明</div>
         <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
             <div>• 所有資料存在<strong>瀏覽器 localStorage</strong>，不上傳任何伺服器</div>
-            <div>• 清除瀏覽器快取或資料會導致資料遺失，請定期備份</div>
+            <div>• <strong>每次開啟頁面會自動清除本機資料</strong>，請務必備份後再關閉</div>
+            <div>• 正常使用流程：開啟 → 還原備份 → 操作 → 備份 → 關閉</div>
             <div>• 不同裝置的資料各自獨立，換裝置需透過備份 JSON 還原</div>
         </div>
 
@@ -856,9 +1204,114 @@ input[type=file]::file-selector-button {
 
             <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--green)">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span style="font-family:var(--mono);font-weight:700;color:var(--green)">V4.63 ⭐ 最新</span>
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--green)">V4.96 ⭐ 最新</span>
                 </div>
-                <div style="font-size:.78rem;color:var(--text)">年度目標模組加入預估年底資產、KPI 拖拉重排、Watchlist 加入備份/還原、隱藏數字涵蓋年度目標和 YTD% 區塊</div>
+                <div style="font-size:.78rem;color:var(--text)">隱私保護：① 開啟頁面時自動清除 localStorage 所有帳戶資料，每次從空白開始；② 關閉/重新整理前跳出提醒確認已備份。正常使用流程：開啟 → 還原備份 → 操作 → 備份 → 關閉。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.93</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">通用版自訂持倉匯入（④）新增選填「現價」欄位，對齊嘉信版行為：有填股價則匯入後 KPI 即顯示，同時存入備用快取；無填則需按「⚡ 全股價」。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.91</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">根本修正帳戶切換 KPI 污染 bug（Console trace 確認）：loadCurrentUser 的 if(raw) 分支不清畫面，切換到有過空資料的帳戶時 KPI 殘留舊帳戶數字。修法：resetUIState() 提到 if/else 之前，每次切換先清空再填入。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.89</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">DEV_RULES 記錄帳戶切換污染 bug 追查進度與待修清單。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.88</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">clearAnnualGoal() 內的自動存檔移除，避免切換帳戶中途存檔污染新帳戶。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.87</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">新增 clearUserData()，switchUser 和 deleteUser 切換前先清記憶體再載入。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.86</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">DEV_RULES 補入修改授權規範與主動審查規範。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.85</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">根本修正切換/新增帳戶時畫面殘留問題：loadCurrentUser 無資料分支直接呼叫 resetUIState()，確保所有 UI 元素完整清空，不再逐項補漏。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.84</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">修正新增帳戶時畫面殘留上一帳戶內容的問題（即時查詢、股價狀態列、趨勢明細表）。同步補 DEV_RULES resetUIState 規範。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.83</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">匯入入口說明文字（①②③④⑤⑥各自用途）。重建快照前新增股數驗證：若持倉與交易紀錄計算結果差異超過 0.5 股，跳出提示讓 user 確認後再繼續。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.82</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">嘉信版 bug 修正：parseSwabDate 無法處理「MM/DD/YYYY as of MM/DD/YYYY」格式，導致 NVDA 股票分割記錄（2024-06-10）被過濾掉，成本基礎偏高。修正後正確解析日期，分割記錄正常進入計算。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.81</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">清除修正：補上趨勢報表交易明細表、即時查詢輸入框與結果、股價狀態列（Finnhub / API計數）三處清除後未歸零的問題。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.80</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">clearAllData 重構：拆出 clearDataVariables()（資料歸零）和 resetUIState()（畫面清空）兩張作業卡，集中清除邏輯，避免新增功能時遺漏。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.79</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">通用 CSV 匯入（支援 Firstrade / TD / 凱基等券商）：④自訂持倉、⑤自訂已實現損益、⑥自訂交易紀錄。欄位對應 + 格式儲存 + 自動比對 + 預覽確認。與 Schwab ①②③ 互斥分流。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.69</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">使用說明 Modal 重構（標題+頁籤+關閉按鈕固定頂部，內容內部捲動）、周轉表固定高度（max-height 520px）+ 標題列 sticky</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.68</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">YTD 校正設計重構：只移動基準線位置，趨勢圖原始數字完全不動。面板折疊修正。基準值面板加入隱藏數字規範。</div>
             </div>
 
             <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
@@ -969,9 +1422,10 @@ input[type=file]::file-selector-button {
         </div>
     </div>
 
-    <div style="margin-top:20px;text-align:right">
+    <div style="margin-top:20px;text-align:right;display:none">
         <button class="btn btn-outline btn-sm" onclick="closeHelpModal()">關閉</button>
     </div>
+    </div><!-- end scroll area -->
 </div>
 </div>
 
@@ -1024,6 +1478,139 @@ input[type=file]::file-selector-button {
 
     <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeBackupModal()">關閉</button>
+    </div>
+</div>
+</div>
+
+<!-- ── [V4.70] 通用 CSV 匯入 MODAL ── -->
+<!-- 原因：五步驟流程 上傳→讀欄位→對應→預覽→匯入→存格式 -->
+<div class="modal-backdrop" id="csvImportModal" style="display:none">
+<div class="modal" style="max-width:620px;width:95vw;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <!-- 標題 -->
+    <div style="padding:18px 20px 0;flex-shrink:0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="margin:0;font-size:.95rem" id="csvModalTitle">📂 自訂 CSV 匯入</h3>
+            <button class="btn btn-outline btn-sm" onclick="closeCsvImportModal()">✕ 關閉</button>
+        </div>
+        <!-- 步驟指示器 -->
+        <div class="import-steps" id="importSteps">
+            <div class="import-step active" id="step1">① 上傳</div>
+            <div class="import-step" id="step2">② 欄位對應</div>
+            <div class="import-step" id="step3">③ 預覽</div>
+            <div class="import-step" id="step4">④ 完成</div>
+        </div>
+    </div>
+
+    <!-- 內容區（可捲動） -->
+    <div style="flex:1;overflow-y:auto;padding:18px 20px" id="csvModalBody">
+
+        <!-- STEP 1: 上傳 -->
+        <div id="csvStep1">
+            <div style="font-size:.82rem;color:var(--text2);margin-bottom:14px" id="csvStep1Desc">
+                上傳 CSV 檔案，系統會自動讀取欄位名稱。
+            </div>
+            <div style="margin-bottom:14px">
+                <input type="file" id="csvUploadInput" accept=".csv" onchange="onCustomCsvUpload(this)">
+            </div>
+        </div>
+
+        <!-- STEP 2: 欄位對應 -->
+        <div id="csvStep2" style="display:none">
+            <!-- [V4.70fix] 已存格式按鈕：主動選擇才套入，不自動帶入 -->
+            <div id="savedFormatsArea" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--blue-l);border:1px solid #bfdbfe;border-radius:6px">
+                <div class="format-area-label" style="font-size:.75rem;font-weight:600;color:var(--blue);margin-bottom:6px">🗂 已存格式（點選套入欄位對應）：</div>
+                <div id="savedFormatsList"></div>
+            </div>
+            <div style="font-size:.78rem;color:var(--text2);margin-bottom:12px">
+                請對應 CSV 欄位到系統欄位。標 <span style="color:var(--red)">*</span> 為必填。
+            </div>
+            <div class="field-mapper" id="fieldMapperBody"></div>
+
+            <!-- [V4.71] 交易類型動作對應（只在 txn 類型顯示）— input text 改為 select 下拉，選項從 CSV Action 欄唯一值動態產生 -->
+            <div id="actionMappingSection" style="display:none;margin-top:16px;padding:12px;background:#fef9ec;border:1px solid #fcd34d;border-radius:6px">
+                <div style="font-size:.78rem;font-weight:700;color:#92400e;margin-bottom:10px">
+                    🔀 交易動作對應
+                    <div style="font-size:.68rem;font-weight:400;color:#a16207;margin-top:2px">對應 CSV 裡的動作名稱，買入／賣出為必填；其餘選填，沒有可略過</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr;gap:8px;overflow:hidden" id="actionMappingBody">
+                    <div class="field-row" style="background:white;min-width:0">
+                        <div class="field-label">買入 <span class="field-required">*</span><div style="font-size:.62rem;color:var(--text3);font-weight:400">Schwab: Buy</div></div>
+                        <select class="field-select" id="am-buy" style="border:1px solid var(--border2);border-radius:5px;padding:5px 8px;min-width:0;width:100%"><option value="">— 不對應 —</option></select>
+                    </div>
+                    <div class="field-row" style="background:white;min-width:0">
+                        <div class="field-label">賣出 <span class="field-required">*</span><div style="font-size:.62rem;color:var(--text3);font-weight:400">Schwab: Sell</div></div>
+                        <select class="field-select" id="am-sell" style="border:1px solid var(--border2);border-radius:5px;padding:5px 8px;min-width:0;width:100%"><option value="">— 不對應 —</option></select>
+                    </div>
+                    <div class="field-row" style="background:white;min-width:0">
+                        <div class="field-label">股息再投入<div style="font-size:.62rem;color:var(--text3);font-weight:400">Schwab: Reinvest Shares</div></div>
+                        <select class="field-select" id="am-reinvest" style="border:1px solid var(--border2);border-radius:5px;padding:5px 8px;min-width:0;width:100%"><option value="">— 不對應 —</option></select>
+                    </div>
+                    <div class="field-row" style="background:white;min-width:0">
+                        <div class="field-label">股份過帳<div style="font-size:.62rem;color:var(--text3);font-weight:400">Schwab: Journaled Shares</div></div>
+                        <select class="field-select" id="am-split" style="border:1px solid var(--border2);border-radius:5px;padding:5px 8px;min-width:0;width:100%"><option value="">— 不對應 —</option></select>
+                    </div>
+                    <div class="field-row" style="background:white;min-width:0">
+                        <div class="field-label">股票分割<div style="font-size:.62rem;color:var(--text3);font-weight:400">Schwab: Stock Split</div></div>
+                        <select class="field-select" id="am-stocksplit" style="border:1px solid var(--border2);border-radius:5px;padding:5px 8px;min-width:0;width:100%"><option value="">— 不對應 —</option></select>
+                    </div>
+                    <div class="field-row" style="background:white;min-width:0">
+                        <div class="field-label">外部入金<div style="font-size:.62rem;color:var(--text3);font-weight:400">Schwab: Wire Received</div></div>
+                        <select class="field-select" id="am-wire" style="border:1px solid var(--border2);border-radius:5px;padding:5px 8px;min-width:0;width:100%"><option value="">— 不對應 —</option></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 3: 預覽 -->
+        <div id="csvStep3" style="display:none">
+            <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px" id="previewSummary"></div>
+            <div class="preview-table-wrap" id="previewTableWrap"></div>
+            <div id="previewSkipInfo" style="margin-top:8px;font-size:.72rem;color:var(--yellow)"></div>
+        </div>
+
+        <!-- STEP 4: 完成 -->
+        <div id="csvStep4" style="display:none">
+            <div class="import-summary" id="importSummaryText"></div>
+            <!-- [V4.72] 交易紀錄匯入完成後顯示重建快照按鈕 -->
+            <!-- 原因：使用者匯入 ⑥ 後不知道還需要手動觸發重建，流程斷點 -->
+            <div id="rebuildSnapshotRow" style="display:none;margin-top:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px">
+                <div style="font-size:.78rem;font-weight:600;color:#166534;margin-bottom:8px">📈 下一步：重建歷史快照</div>
+                <div style="font-size:.72rem;color:#15803d;margin-bottom:8px">交易紀錄已匯入，點下方按鈕開始用歷史股價重建每日資產快照。</div>
+                <button class="btn btn-sm" style="background:#16a34a;color:white;border-color:#16a34a"
+                    onclick="closeCsvImportModal(); confirmRebuild();">🚀 立即重建歷史快照</button>
+            </div>
+            <!-- [V4.70] 持倉匯入完成後輸入現金餘額 -->
+            <div id="cashInputRow" style="display:none;margin-top:12px;padding:10px 12px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:6px">
+                <div style="font-size:.78rem;font-weight:600;color:var(--blue);margin-bottom:8px">💰 目前現金餘額</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:.78rem;color:var(--text2);white-space:nowrap">帳戶現金 ($)：</span>
+                    <input type="number" id="customCashInput" placeholder="例如 5.80" min="0" step="0.01"
+                        style="width:140px;padding:5px 8px;border:1px solid #bfdbfe;border-radius:5px;font-size:.82rem">
+                    <button class="btn btn-primary btn-sm" onclick="applyCustomCash()">套用</button>
+                    <span id="cashApplyConfirm" style="font-size:.75rem;color:var(--green);display:none">✓ 已更新</span>
+                </div>
+            </div>
+            <div class="format-save-row" id="formatSaveRow">
+                <span style="font-size:.75rem;color:#92400e;white-space:nowrap" id="formatSaveLabel">💾 儲存此格式範本：</span>
+                <input type="text" id="formatNameInput" placeholder="例如：Firstrade持倉" style="flex:1;padding:5px 8px;border:1px solid #fcd34d;border-radius:5px;font-size:.78rem">
+                <button class="btn btn-sm" style="background:#f59e0b;color:white;border-color:#f59e0b;white-space:nowrap" onclick="saveFormatTemplate()">儲存</button>
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('formatSaveRow').style.display='none'">略過</button>
+                <span id="formatSaveConfirm" class="diag-tag diag-ok" style="display:none;padding:4px 10px"></span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 底部按鈕 -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+        <button class="btn btn-outline btn-sm" id="csvBtnBack" onclick="csvStepBack()" style="display:none">← 上一步</button>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="closeCsvImportModal()">取消</button>
+            <button class="btn btn-primary btn-sm" id="csvBtnNext" onclick="csvStepNext()" style="display:none">下一步 →</button>
+            <button class="btn btn-success btn-sm" id="csvBtnImport" onclick="confirmCustomImport()" style="display:none">✓ 確認匯入</button>
+            <button class="btn btn-outline btn-sm" id="csvBtnDone" onclick="closeCsvImportModal()" style="display:none">完成</button>
+        </div>
     </div>
 </div>
 </div>
@@ -1220,10 +1807,10 @@ input[type=file]::file-selector-button {
     </div>
 
     <!-- 驗證面板 -->
-    <div class="card section-gap" id="verifyPanel">
+    <div class="card section-gap collapsed" id="verifyPanel">
         <div class="card-header collapse-toggle" onclick="togglePanel('verifyPanel')">
             <div class="card-title">✅ 數字驗證面板</div>
-            <span class="collapse-icon">▼</span>
+            <span class="collapse-icon">▶</span>
         </div>
         <div class="card-body collapsible-body">
             <div style="font-size:.78rem;color:var(--text2);margin-bottom:12px">
@@ -1245,6 +1832,29 @@ input[type=file]::file-selector-button {
             </div>
             <button class="btn btn-primary btn-sm" onclick="runVerify()">🔍 執行驗證</button>
             <div id="verifyResult" style="margin-top:12px"></div>
+        </div>
+    </div>
+
+    <!-- [V4.66] 基準值校正面板 -->
+    <!-- 原因：系統模擬快照與嘉信真實年初值可能有偏差，允許手動校正讓 YTD% 對齊 -->
+    <div class="card section-gap collapsed" id="ytdBasePanel">
+        <div class="card-header collapse-toggle" onclick="togglePanel('ytdBasePanel')">
+            <div class="card-title">📐 YTD 基準值校正（嘉信對齊）</div>
+            <span class="collapse-icon">▶</span>
+        </div>
+        <div class="card-body collapsible-body">
+            <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">
+                每年年初輸入嘉信的實際總資產，讓 YTD% 計算與嘉信對齊。不影響趨勢圖上的原始數字。
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <select id="ytdBaseYearSelect" style="padding:5px 8px;border:1px solid var(--border2);border-radius:6px;font-size:.82rem;background:white" onchange="onYtdBaseYearChange()"></select>
+                <span style="font-size:.78rem;color:var(--text2);white-space:nowrap">年初實際總資產 ($)</span>
+                <input type="number" id="ytdBaseInput" placeholder="例如 118393.17"
+                    style="width:160px;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;font-size:.82rem">
+                <button class="btn btn-primary btn-sm" onclick="applyYtdBase()">✓ 套用</button>
+                <button class="btn btn-outline btn-sm" onclick="clearYtdBase()">✕ 清除</button>
+                <span id="ytdBaseStatus" style="font-size:.75rem;color:var(--text3)"></span>
+            </div>
         </div>
     </div>
 
@@ -1296,7 +1906,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.63 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.96 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1326,8 +1936,13 @@ const COL_DEFS = [
     { key:'mktVal',    label:'市值',         align:'right', sortable:true  },
     { key:'weight',    label:'持股占比',     align:'right', sortable:true  },
     { key:'realized',  label:'累積實現損益', align:'right', sortable:true  },
-    { key:'days',      label:'周轉天數',     align:'right', sortable:true  },
-    { key:'dailyOut',      label:'日均產值',     align:'right', sortable:true  },
+    // [V4.66] 「周轉天數」改名為「累計佔用天數」，新增「現役天數」
+    // 原因：與討論定義的四欄並行一致，區分歷史累積和現役周期
+    { key:'days',         label:'累計佔用天數', align:'right', sortable:true  },
+    { key:'activeDays',   label:'現役天數',     align:'right', sortable:true  },
+    // [V4.66] 「日均產值」改名為「歷史日均產值」，新增「現役日均產值」
+    { key:'dailyOut',     label:'歷史日均產值', align:'right', sortable:true  },
+    { key:'activeDailyOut', label:'現役日均產值', align:'right', sortable:true  },
     { key:'rollingOut',    label:'滾動日均產值', align:'right', sortable:true  },
     { key:'totalDailyOut', label:'總日均產值',   align:'right', sortable:true  },
     { key:'outputContrib', label:'產值貢獻%',    align:'right', sortable:true  },
@@ -1358,6 +1973,10 @@ let weekData    = {};   // 52週高低點 { SYM: { high52, low52 } }
 let notes       = {};   // 備忘錄 { SYM: { target, entryReason, stopLoss } }
 let monthlyGoal = 0;    // 保留相容性
 let annualGoal  = 0;    // 年度目標金額
+// [V4.66] 基準值校正 — 按年份儲存嘉信真實年初總資產
+// 原因：系統模擬快照可能與嘉信不一致，允許使用者手動校正讓 YTD% 與嘉信對齊
+// 影響範圍：calcYTD()、renderTrend() 趨勢圖 totalAssets、YTD 基準線
+let ytdBaseOverride = {}; // { "2026": 118393.17, "2027": ... }
 let sortCol = 'dailyOut', sortDir = 'desc';
 
 // 雷達
@@ -1365,6 +1984,23 @@ let watchlist  = JSON.parse(localStorage.getItem('hunter_watchlist') || '[]');
 let wlData     = {};
 let filterPool = [];
 let filterData = {};
+
+// [V4.70] 通用 CSV 匯入格式範本庫（全域共用，與帳戶無關）
+// 原因：儲存各券商欄位對應規則，下次上傳自動比對帶入
+let csvFormats = JSON.parse(localStorage.getItem('hunter_csv_formats') || '{}');
+
+// [V4.70] 通用匯入執行期狀態（Modal 操作過程中的暫存）
+let _csvImport = {
+    type: '',
+    step: 1,
+    headers: [],
+    rows: [],
+    mapping: {},
+    actionMapping: {},  // { buy, sell, reinvest, split, wire }
+    parsedData: [],
+    skipped: [],
+    matchedFormat: null
+};
 
 // ══════════════════════════════════════════════════════
 //  MULTI-USER STORAGE
@@ -1380,16 +2016,50 @@ function saveUsers() {
     localStorage.setItem('hunter_active', activeUser);
 }
 
+// [V4.87] 只清帳戶資料變數，不動 users / watchlist / colOrder 等全域設定
+// 原因：switchUser 切換前需要清記憶體，但不能影響帳戶清單和共用設定
+// 影響範圍：switchUser、deleteUser
+function clearUserData() {
+    inventory = []; stats = {}; prices = {}; rawTrades = [];
+    txnData = []; posSnapshots = []; currentCash = 0;
+    weekData = {}; notes = {};
+    initialPricesSnapshot = {};
+    annualGoal = 0; monthlyGoal = 0;
+    ytdBaseOverride = {};
+}
+
 function saveCurrentUser() {
     if (!activeUser) return;
-    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash, weekData, notes, monthlyGoal, annualGoal };
+    // [V4.66] 新增 ytdBaseOverride 到儲存資料
+    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash, weekData, notes, monthlyGoal, annualGoal, ytdBaseOverride };
     localStorage.setItem(`hunter_${activeUser}_data`, JSON.stringify(data));
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     document.getElementById('lastSaved').textContent = `已存檔 ${now}`;
 }
 
+// [V4.78] 獨立函數：清除所有 file input 殘留顯示
+// 原因：clearAllData 和 loadCurrentUser 都需要呼叫，抽出避免重複
+function resetFileInputs() {
+    [
+        { id: 'inventoryFile', accept: '.csv,.xlsx', handler: 'handleInventoryFile' },
+        { id: 'statementFile', accept: '.csv',       handler: 'handleStatementFile' },
+        { id: 'txnFile',       accept: '.csv',       handler: 'handleTxnFile'       },
+    ].forEach(({ id, accept, handler }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.parentNode.innerHTML = `<input type="file" id="${id}" accept="${accept}" onchange="${handler}(this)">`;
+    });
+}
+
 function loadCurrentUser() {
     if (!activeUser) return;
+
+    // [V4.96] 無論 if/else 都先清空畫面，再填入新帳戶資料
+    // 原因：if(raw) 分支只載入資料、不清畫面，導致切換到「有存過空資料的帳戶」時
+    //       KPI 數字殘留前一個帳戶的值（Console 確認：hunter_qq_data.inventory=0 但畫面顯示舊帳戶 KPI）
+    // 影響範圍：所有帳戶切換場景，確保每次切換都從乾淨畫面開始
+    resetUIState();
+
     const raw = localStorage.getItem(`hunter_${activeUser}_data`);
     if (raw) {
         try {
@@ -1406,22 +2076,21 @@ function loadCurrentUser() {
             weekData    = d.weekData    || {};
             notes       = d.notes       || {};
             initialPricesSnapshot = d.initialPricesSnapshot || {};
+            // [V4.66] 載入基準值校正
+            ytdBaseOverride = d.ytdBaseOverride || {};
         } catch(e) { inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; }
     } else {
         inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; initialPricesSnapshot={};
+        annualGoal = 0; monthlyGoal = 0; currentCash = 0;
+        weekData = {}; notes = {}; ytdBaseOverride = {};
     }
     // 同步所有 UI 狀態
     const txnStatusEl = document.getElementById('txnStatus');
     const buildBtn    = document.getElementById('buildSnapshotBtn');
     const diagBar     = document.getElementById('diagBar');
-    const invFile     = document.getElementById('inventoryFile');
-    const stmFile     = document.getElementById('statementFile');
-    const txnFile     = document.getElementById('txnFile');
 
-    // 清空檔案選擇器顯示
-    if (invFile) invFile.value = '';
-    if (stmFile) stmFile.value = '';
-    if (txnFile) txnFile.value = '';
+    // [V4.78] 清空檔案選擇器
+    resetFileInputs();
 
     // 交易紀錄狀態
     if (txnStatusEl) {
@@ -1452,10 +2121,13 @@ function loadCurrentUser() {
     const goalPctInputEl = document.getElementById('annualGoalPctInput');
     if (goalPctInputEl) goalPctInputEl.value = '';
     renderAnnualGoal();
+    // [V4.70] 切換帳戶後同步互斥鎖定狀態
+    checkImportLock();
 }
 
 function switchUser(name) {
-    saveCurrentUser();
+    saveCurrentUser();         // 先存好目前帳戶
+    clearUserData();           // [V4.87] 清記憶體，避免舊資料污染新帳戶
     activeUser = name;
     saveUsers();
     loadCurrentUser();
@@ -1517,6 +2189,7 @@ function deleteUser(name) {
     users = users.filter(u => u !== name);
     // 如果刪的是目前帳戶，切換到第一個
     if (activeUser === name) {
+        clearUserData();       // [V4.87] 清記憶體，避免被刪帳戶資料污染下一個帳戶
         activeUser = users[0];
     }
     saveUsers();
@@ -1566,6 +2239,7 @@ function addDiagMsg(msg, type='diag-info') {
 //  TEMPLATES
 // ══════════════════════════════════════════════════════
 function downloadInventoryTemplate() {
+    // [V4.96] 範本加入選填 Price 欄，對齊嘉信版匯入後即顯示 KPI 的行為
     downloadCSV(`Symbol,Shares,Cost\nNVDA,240,123.16\nVRT,71,169.22\nASTS,70,93.06\nRKLB,178,56.46`, '持股匯入範例.csv');
 }
 function downloadDemo() {
@@ -1683,6 +2357,8 @@ function parseSchwabPositions(rows) {
 
     document.getElementById('diagBar').innerHTML = `<span class="diag-tag diag-ok">✓ Schwab Positions｜${inventory.length} 筆持股，現金 ${fmtUSD(currentCash)}，快照已記錄（共 ${posSnapshots.length} 筆）</span>`;
     updateUnrealizedKPI(); saveCurrentUser(); selfCheck(); render();
+    // [V4.76] 匯入後同步互斥鎖定狀態，確保通用版 ④⑤⑥ 正確 disable
+    checkImportLock();
 }
 
 function pcn(raw) {
@@ -1752,6 +2428,8 @@ function calculateStats(data) {
     });
     refreshKPI(grandGain, grandDays);
     saveCurrentUser(); selfCheck(); render(); renderTrend();
+    // [V4.76] 匯入後同步互斥鎖定狀態
+    checkImportLock();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1835,6 +2513,10 @@ function saveAnnualGoal() {
 }
 
 function clearAnnualGoal() {
+    // [V4.88] 拿掉 saveCurrentUser()
+    // 原因：clearAnnualGoal 被 resetUIState 呼叫時，activeUser 已切換但記憶體尚未完全清空
+    //       自動存檔會把舊帳戶資料污染進新帳戶的 localStorage
+    //       存檔責任交由呼叫者決定，不在清除函數內自動觸發
     annualGoal = 0;
     const goalInputEl = document.getElementById('annualGoalInput');
     const goalPctInputEl = document.getElementById('annualGoalPctInput');
@@ -1844,7 +2526,6 @@ function clearAnnualGoal() {
     if (wrap) wrap.style.display = 'none';
     const forecastWrap = document.getElementById('annualForecastWrap');
     if (forecastWrap) forecastWrap.style.display = 'none';
-    saveCurrentUser();
 }
 
 // 相容舊呼叫
@@ -1952,8 +2633,15 @@ function calcYTD() {
     if (!ytdSnaps.length) return;
 
     const baseSnap = ytdSnaps[0];
-    const baseTotalAssets = baseSnap.totalAssets;
+    let baseTotalAssets = baseSnap.totalAssets;
     if (!baseTotalAssets) return;
+
+    // [V4.66] 基準值校正：若有 ytdBaseOverride 則用嘉信真實值取代系統快照值
+    // 原因：系統模擬快照可能與嘉信不一致，offset 只影響計算，不修改原始快照
+    const override = ytdBaseOverride[yearStr];
+    if (override && override > 0) {
+        baseTotalAssets = override;
+    }
 
     // 目前總資產（需要有股價才能算）
     const totalMV = inventory.reduce((sum,it)=>{ const pp=prices[it.Symbol]; return pp!==undefined?sum+pp*parseFloat(it.Shares):sum; },0);
@@ -1969,18 +2657,86 @@ function calcYTD() {
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
     // 修正後 YTD%：扣除外部資金影響
-    // 公式：(目前總資產 - 年初總資產 - 淨流入) ÷ (年初總資產 + 淨流入) × 100%
     const adjBase = baseTotalAssets + netExternalFlow;
     const ytdPct = adjBase > 0 ? ((currentTotal - baseTotalAssets - netExternalFlow) / adjBase * 100) : 0;
     const color = ytdPct >= 0 ? 'green' : 'red';
     setKPI('kpiYTD', `${ytdPct >= 0 ? '+' : ''}${ytdPct.toFixed(1)}%`, color);
 
     // 子標題：顯示基準日和淨入金
-    let subText = `基準 ${baseSnap.date} ${fmtUSD(baseTotalAssets)}`;
+    let subText = override && override > 0
+        ? `基準 ${baseSnap.date} ${fmtUSD(baseTotalAssets)}（嘉信校正）`
+        : `基準 ${baseSnap.date} ${fmtUSD(baseTotalAssets)}`;
     if (netExternalFlow !== 0) {
         subText += ` ｜ 淨入金 ${netExternalFlow >= 0 ? '+' : ''}${fmtUSD(netExternalFlow)}`;
     }
     document.getElementById('kpiYTDSub').textContent = subText;
+}
+
+// [V4.67] 基準值校正函數 — 加入年份選擇器
+function applyYtdBase() {
+    const val = parseFloat(document.getElementById('ytdBaseInput').value);
+    if (!val || val <= 0) { alert('請輸入有效的總資產金額'); return; }
+    const sel = document.getElementById('ytdBaseYearSelect');
+    const year = sel ? sel.value : String(new Date().getFullYear());
+    ytdBaseOverride[year] = val;
+    saveCurrentUser();
+    const status = document.getElementById('ytdBaseStatus');
+    if (status) status.textContent = `✓ ${year} 年基準已校正為 $${val.toLocaleString('en-US',{minimumFractionDigits:2})}`;
+    calcYTD();
+    renderTrend();
+}
+
+function clearYtdBase() {
+    const sel = document.getElementById('ytdBaseYearSelect');
+    const year = sel ? sel.value : String(new Date().getFullYear());
+    delete ytdBaseOverride[year];
+    saveCurrentUser();
+    const input = document.getElementById('ytdBaseInput');
+    const status = document.getElementById('ytdBaseStatus');
+    if (input) input.value = '';
+    if (status) status.textContent = `${year} 年校正值已清除`;
+    calcYTD();
+    renderTrend();
+}
+
+function onYtdBaseYearChange() {
+    const sel = document.getElementById('ytdBaseYearSelect');
+    const input = document.getElementById('ytdBaseInput');
+    const status = document.getElementById('ytdBaseStatus');
+    if (!sel || !input) return;
+    const year = sel.value;
+    if (ytdBaseOverride[year]) {
+        input.value = ytdBaseOverride[year];
+        if (status) status.textContent = `✓ ${year} 年已套用嘉信校正值`;
+    } else {
+        input.value = '';
+        if (status) status.textContent = '';
+    }
+}
+
+function initYtdBaseUI() {
+    // [V4.67] 動態列出有快照資料的年份，預設今年
+    const sel = document.getElementById('ytdBaseYearSelect');
+    const input = document.getElementById('ytdBaseInput');
+    const status = document.getElementById('ytdBaseStatus');
+    if (!sel) return;
+
+    // 收集所有有快照的年份
+    const years = [...new Set(posSnapshots.map(s => s.date?.slice(0,4)).filter(Boolean))].sort().reverse();
+    const thisYear = String(new Date().getFullYear());
+    if (!years.includes(thisYear)) years.unshift(thisYear);
+
+    sel.innerHTML = years.map(y => `<option value="${y}">${y} 年</option>`).join('');
+    sel.value = thisYear;
+
+    // 顯示目前選定年份的校正值
+    if (input && ytdBaseOverride[thisYear]) {
+        input.value = ytdBaseOverride[thisYear];
+        if (status) status.textContent = `✓ ${thisYear} 年已套用嘉信校正值`;
+    } else {
+        if (input) input.value = '';
+        if (status) status.textContent = '';
+    }
 }
 
 function refreshKPI(grandGain, grandDays) {
@@ -1994,6 +2750,19 @@ function refreshKPI(grandGain, grandDays) {
     // kpiDays 已移除，不再更新
     const avg = grandDays>0 ? grandGain/grandDays : 0;
     setKPI('kpiAvgOutput', fmtUSD(avg), avg>=0?'green':'red');
+
+    // [V4.64] 已實現報酬率 = 累積實現損益 ÷ 累積成本基礎
+    // 原因：補充財務視角，顯示出場成績單的報酬率
+    // 影響範圍：kpiRealizedReturn KPI 卡片
+    const totalCB = inventory.reduce((s,it)=>s+parseFloat(it.Cost)*parseFloat(it.Shares),0);
+    if (totalCB > 0) {
+        const realizedReturn = (grandGain / totalCB * 100);
+        setKPI('kpiRealizedReturn', (realizedReturn>=0?'+':'')+realizedReturn.toFixed(1)+'%', realizedReturn>=0?'green':'red');
+        document.getElementById('kpiRealizedReturnSub').innerText = `實現 ${fmtUSD(grandGain)} ÷ 成本 ${fmtUSD(totalCB)}`;
+    } else {
+        setKPI('kpiRealizedReturn', '—', 'green');
+    }
+
     renderAnnualGoal();
 }
 
@@ -2002,6 +2771,10 @@ function refreshKPI(grandGain, grandDays) {
 // ══════════════════════════════════════════════════════
 async function refreshPrices() {
     if (!inventory.length) { alert('請先匯入持股資料'); return; }
+    // [V4.96] 記錄呼叫當下的帳戶，async 完成後比對，避免切換帳戶造成 race condition
+    // 原因：使用者在 await 期間切換帳戶，完成後 saveCurrentUser() 會把舊帳戶資料寫入新帳戶
+    // 影響範圍：refreshPrices 結尾的 saveCurrentUser / render
+    const calledForUser = activeUser;
     const syms = inventory.map(i=>i.Symbol);
     const dot=document.getElementById('pulseDot'), src=document.getElementById('priceSourceTag'), tm=document.getElementById('priceTimeTag');
     dot.classList.remove('off'); src.textContent='Finnhub'; tm.textContent='查詢中...';
@@ -2039,7 +2812,10 @@ async function refreshPrices() {
     tm.textContent=`${now} ｜ API ${fetched}/${syms.length}${fb?` ｜ ${fb}筆快取`:''}`;
     src.textContent='Finnhub';
     updateUnrealizedKPI();
-    saveCurrentUser(); render();
+    // [V4.96] 僅在帳戶未切換時才存檔，防止 async race condition 污染新帳戶
+    if (activeUser === calledForUser) {
+        saveCurrentUser(); render();
+    }
 }
 
 function updateUnrealizedKPI() {
@@ -2062,6 +2838,14 @@ function updateUnrealizedKPI() {
             const totalAvg = (grandGain + tu) / grandDays;
             setKPI('kpiTotalAvgOutput', fmtUSD(totalAvg), totalAvg>=0?'green':'red');
         }
+        // [V4.64] 總報酬率 = (實現 + 未實現) ÷ 累積成本基礎
+        // 原因：補充財務視角，顯示假設今天全出場的總報酬率
+        // 影響範圍：kpiTotalReturn KPI 卡片，隨股價波動
+        if (tc > 0) {
+            const totalReturn = ((grandGain + tu) / tc * 100);
+            setKPI('kpiTotalReturn', (totalReturn>=0?'+':'')+totalReturn.toFixed(1)+'%', totalReturn>=0?'blue':'red');
+            document.getElementById('kpiTotalReturnSub').innerText = `(${fmtUSD(grandGain)}+${fmtUSD(tu)}) ÷ ${fmtUSD(tc)}`;
+        }
         // 股價更新後自動記錄今天快照
         recordSnapshot(tm, tc, currentCash);
         calcYTD();
@@ -2083,18 +2867,18 @@ function recordSnapshot(totalMV, totalCB, totalCash) {
 function buildDailyCash() {
     if (!txnData.length) return {};
 
-    // 現金流水 Action 定義
-    // 從今天往回推：遇到「現金流入事件」就減回去，遇到「現金流出事件」就加回去
+    // 現金流水 Action 定義（key 全小寫，lookup 時 toLowerCase）
+    // [V4.74] 改成大小寫不敏感比對，避免 'BUY' vs 'Buy' 問題
     const cashFlowActions = {
-        'Buy':              r => -(r.qty * r.price),   // 買入花現金（往回加回來）
-        'Sell':             r => r.qty * r.price,       // 賣出收現金（往回減掉）
-        'Reinvest Shares':  r => -(r.qty * r.price),   // 股息再投入花現金
-        'Wire Received':    r => r.amount,              // 入金
-        'Cash Dividend':    r => r.amount,
-        'Qual Div Reinvest':r => r.amount,
-        'Bond Interest':    r => r.amount,
-        'NRA Tax Adj':      r => r.amount,
-        'Journal':          r => r.amount,
+        'buy':              r => -(r.qty * r.price),
+        'sell':             r => r.qty * r.price,
+        'reinvest shares':  r => -(r.qty * r.price),
+        'wire received':    r => r.amount,
+        'cash dividend':    r => r.amount,
+        'qual div reinvest':r => r.amount,
+        'bond interest':    r => r.amount,
+        'nra tax adj':      r => r.amount,
+        'journal':          r => r.amount,
     };
 
     // 按日期分組
@@ -2113,9 +2897,9 @@ function buildDailyCash() {
 
     allDates.forEach(date => {
         const txns = byDate[date];
-        // 倒推：把當天的現金流反向
+        // 倒推：把當天的現金流反向（[V4.74] key 已全小寫，lookup 時 toLowerCase）
         txns.forEach(t => {
-            const fn = cashFlowActions[t.action];
+            const fn = cashFlowActions[(t.action || '').toLowerCase()];
             if (fn) cash -= fn(t); // 反向
         });
         dailyCash[date] = Math.max(0, cash);
@@ -2144,9 +2928,10 @@ function handleTxnFile(input) {
             const rows = results.data;
             if (!rows.length) { addDiagMsg('交易紀錄：無資料', 'diag-err'); return; }
 
-            // 保留所有有現金影響的 Action
+            // 保留所有有持倉或現金影響的 Action
+            // [V4.75] 加入 Stock Split、Internal Transfer — Schwab CSV 用這些記錄股票分割和帳戶轉移
             const validActions = new Set([
-                'Buy','Sell','Reinvest Shares','Journaled Shares',
+                'Buy','Sell','Reinvest Shares','Journaled Shares','Stock Split','Internal Transfer',
                 'Wire Received','Cash Dividend','Qual Div Reinvest',
                 'Bond Interest','NRA Tax Adj','Journal'
             ]);
@@ -2171,6 +2956,8 @@ function handleTxnFile(input) {
 
             addDiagMsg(`✓ 交易紀錄 ${txnData.length} 筆`, 'diag-ok');
             saveCurrentUser();
+            // [V4.78] 匯入後同步互斥鎖定，確保通用版 ④⑤⑥ 正確 disable
+            checkImportLock();
         },
         error: e => addDiagMsg('交易紀錄解析失敗: '+e.message, 'diag-err')
     });
@@ -2178,9 +2965,15 @@ function handleTxnFile(input) {
 document.getElementById('txnFile').addEventListener('change', function(e) { handleTxnFile(this); });
 
 // MM/DD/YYYY → YYYY-MM-DD
+// [V4.82] 支援 "MM/DD/YYYY as of MM/DD/YYYY" 格式（Schwab Stock Split 等記錄會用此格式）
+// 原因：NVDA 2024-06-10 分割記錄日期為 "06/10/2024 as of 06/07/2024"，舊版解析失敗回傳空字串
+//       導致該筆被 .filter(r => r.date) 過濾掉，NVDA 分割 45 股記錄消失，成本基礎偏高
+// 影響範圍：handleTxnFile() 的所有日期解析，含 Stock Split / Adjustment 等特殊記錄
 function parseSwabDate(raw) {
     if (!raw) return '';
-    const m = raw.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    // 取 "as of" 之前的部分，相容 "MM/DD/YYYY as of MM/DD/YYYY" 格式
+    const dateStr = raw.trim().split(' as of ')[0].trim();
+    const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (!m) return '';
     return `${m[3]}-${m[1]}-${m[2]}`;
 }
@@ -2198,9 +2991,10 @@ function buildDailyHoldings() {
     // 需要先知道分割前持有多少才能算 ratio，這裡用累積方式
     const splitEvents = {};
 
-    // 第一遍：找出所有分割事件
+    // 第一遍：找出所有分割事件（[V4.75] 同時支援 Journaled Shares 和 Stock Split）
     txnData.forEach(t => {
-        if (t.action === 'Journaled Shares' && t.qty > 0) {
+        const act = (t.action || '').toLowerCase();
+        if ((act === 'journaled shares' || act === 'stock split') && t.qty > 0) {
             if (!splitEvents[t.symbol]) splitEvents[t.symbol] = [];
             splitEvents[t.symbol].push({ date: t.date, addedQty: t.qty });
         }
@@ -2222,20 +3016,28 @@ function buildDailyHoldings() {
             if (!t.symbol) return;
             if (!holdings[t.symbol]) holdings[t.symbol] = { qty: 0, totalCost: 0 };
             const h = holdings[t.symbol];
+            // [V4.74] 全部改大小寫不敏感比對，避免 'BUY' vs 'Buy' 問題
+            const act = (t.action || '').toLowerCase();
 
-            if (t.action === 'Buy' || t.action === 'Reinvest Shares') {
+            if (act === 'buy' || act === 'reinvest shares') {
                 h.totalCost += t.qty * t.price;
                 h.qty += t.qty;
-            } else if (t.action === 'Sell') {
+            } else if (act === 'sell') {
                 // FIFO 簡化：賣出時按比例減少成本
                 if (h.qty > 0) {
                     const ratio = Math.min(t.qty, h.qty) / h.qty;
                     h.totalCost -= h.totalCost * ratio;
                     h.qty = Math.max(0, h.qty - t.qty);
                 }
-            } else if (t.action === 'Journaled Shares') {
-                // 股票分割：增加股數，總成本不變（均成本自然下調）
+            } else if (act === 'journaled shares') {
+                // 股票過帳：增加/減少股數，總成本不變
                 h.qty += t.qty;
+            } else if (act === 'stock split') {
+                // [V4.75] Stock Split：Schwab 用此記錄分割新股，邏輯同 Journaled Shares
+                h.qty += t.qty;
+            } else if (act === 'internal transfer') {
+                // 帳戶內部轉移：qty 可能為負（轉出）或正（轉入）
+                if (t.qty) h.qty = Math.max(0, h.qty + t.qty);
             }
         });
 
@@ -2258,18 +3060,22 @@ function buildDailyHoldings() {
 async function buildSnapshotsFromTxn() {
     if (!txnData.length) { alert('請先匯入交易紀錄'); return; }
 
+    // [V4.96] 記錄呼叫當下的帳戶，async 完成後比對，避免切換帳戶造成 race condition
+    // 原因：buildSnapshotsFromTxn 執行期間若使用者切換帳戶，完成後 saveCurrentUser() 會污染新帳戶
+    // 影響範圍：buildSnapshotsFromTxn 結尾的 saveCurrentUser
+    const calledForUser = activeUser;
+
+    // [V4.73] btn 可能是 null（通用版入口不顯示 buildSnapshotBtn），加保護
+    // 原因：通用版從 modal 觸發時 buildSnapshotBtn 是 display:none，直接 .disabled 會崩
     const btn = document.getElementById('buildSnapshotBtn');
     const statusEl = document.getElementById('txnStatus');
-    btn.disabled = true;
-    btn.textContent = '重建中...';
-
-    // 1. 重建每日持倉（先不清舊資料）
-    statusEl.textContent = '重建每日持倉狀態...';
+    if (btn) { btn.disabled = true; btn.textContent = '重建中...'; }
+    if (statusEl) statusEl.textContent = '重建每日持倉狀態...';
     const dailyHoldings = buildDailyHoldings();
     const allTxnDates = Object.keys(dailyHoldings).sort();
     if (!allTxnDates.length) {
-        statusEl.textContent = '無有效交易日期';
-        btn.disabled = false; btn.textContent = '📈 重建歷史快照';
+        if (statusEl) statusEl.textContent = '無有效交易日期 — 請確認欄位對應正確（股票代號、數量不可空白）';
+        if (btn) { btn.disabled = false; btn.textContent = '📈 重建歷史快照'; }
         return;
     }
 
@@ -2365,10 +3171,13 @@ async function buildSnapshotsFromTxn() {
     // 建完成功，才替換 posSnapshots
     newSnapshots.sort((a,b)=>a.date.localeCompare(b.date));
     posSnapshots = newSnapshots;
-    saveCurrentUser();
+    // [V4.96] 僅在帳戶未切換時才存檔，防止 async race condition 污染新帳戶
+    if (activeUser === calledForUser) {
+        saveCurrentUser();
+    }
 
-    statusEl.textContent = `完成！重建 ${built} 個歷史快照（${allTxnDates[0]} ~ ${today}）`;
-    btn.disabled = false; btn.textContent = '📈 重建歷史快照';
+    if (statusEl) statusEl.textContent = `完成！重建 ${built} 個歷史快照（${allTxnDates[0]} ~ ${today}）`;
+    if (btn) { btn.disabled = false; btn.textContent = '📈 重建歷史快照'; }
 
     // 切換到趨勢報表頁面顯示結果
     switchPage('trend');
@@ -2383,6 +3192,41 @@ function sortBy(col) {
     else { sortCol=col; sortDir='desc'; }
     renderTableHead();
     render();
+}
+
+// [V4.67] getActiveDays / getActiveGain 提升到全域
+// 原因：原本定義在 render() 內部，getVal() 無法呼叫，導致現役天數/現役日均產值排序無效
+// 影響範圍：getVal() activeDays/activeDailyOut 排序、render() 內部 cellMap
+// DEV RULE：新增需要排序的欄位，計算函數必須定義在全域
+function _parseTradeDateGlobal(dateStr) {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) return `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+    return dateStr;
+}
+function getActiveDays(sym) {
+    const symTrades = rawTrades.filter(t => t.sym === sym);
+    if (!symTrades.length) return 0;
+    const openDates  = symTrades.map(t => _parseTradeDateGlobal(t.openDate)).filter(Boolean).sort();
+    const closeDates = symTrades.map(t => _parseTradeDateGlobal(t.closeDate)).filter(Boolean).sort();
+    const lastClose  = closeDates[closeDates.length - 1] || '';
+    const newRoundOpens = openDates.filter(d => d > lastClose);
+    const startDate = newRoundOpens.length > 0 ? newRoundOpens[0] : (openDates[0] || '');
+    if (!startDate) return 0;
+    const today = new Date().toISOString().slice(0,10);
+    return Math.max(0, Math.ceil((new Date(today) - new Date(startDate)) / 86400000));
+}
+function getActiveGain(sym) {
+    const symTrades = rawTrades.filter(t => t.sym === sym);
+    if (!symTrades.length) return 0;
+    const openDates  = symTrades.map(t => _parseTradeDateGlobal(t.openDate)).filter(Boolean).sort();
+    const closeDates = symTrades.map(t => _parseTradeDateGlobal(t.closeDate)).filter(Boolean).sort();
+    const lastClose  = closeDates[closeDates.length - 1] || '';
+    const newRoundOpens = openDates.filter(d => d > lastClose);
+    const startDate = newRoundOpens.length > 0 ? newRoundOpens[0] : (openDates[0] || '');
+    if (!startDate) return 0;
+    return symTrades.filter(t => (_parseTradeDateGlobal(t.openDate) || '') >= startDate)
+                    .reduce((sum, t) => sum + (t.gain || 0), 0);
 }
 
 function getVal(item,col) {
@@ -2405,6 +3249,13 @@ function getVal(item,col) {
         case 'weight':    return wt;
         case 'realized':  return s.gain;
         case 'days':      return s.days;
+        // [V4.67] 使用全域函數，排序正常
+        case 'activeDays':     return getActiveDays(item.Symbol);
+        case 'activeDailyOut': {
+            const ad = getActiveDays(item.Symbol);
+            const ag = getActiveGain(item.Symbol);
+            return ad > 0 ? ag / ad : -9999;
+        }
         case 'week52': {
             const w = weekData[item.Symbol];
             if (!w || !p) return -9999;
@@ -2525,6 +3376,8 @@ function render() {
             .reduce((sum, t) => sum + (t.gain || 0), 0);
     }
 
+    // [V4.67] getActiveDays / getActiveGain 已提升為全域函數，render() 直接使用
+
     // 全場滾動日均產值總和（for 產值貢獻%）
     const grandRollingOut = inventory.reduce((sum, it) => {
         return sum + getRollingGain(it.Symbol) / 365;
@@ -2611,7 +3464,21 @@ function render() {
             weight:    `<td>${wt_!==null?`<span style="color:var(--text2)">${wt_.toFixed(1)}%</span>`:'<span class="muted">—</span>'}</td>`,
             realized:  `<td class="${gc}${numbersHidden?' num-hidden':''}">${fmtUSD(s.gain)}</td>`,
             days:      `<td class="muted">${s.days>0?s.days:'—'}</td>`,
+            // [V4.66] 現役天數 cell
+            activeDays: (() => {
+                const ad = getActiveDays(item.Symbol);
+                return `<td class="muted">${ad>0?ad:'—'}</td>`;
+            })(),
             dailyOut:  `<td class="${dc}${numbersHidden?' num-hidden':''}" style="font-size:.9rem;font-weight:700">${s.days>0?fmtUSD(do_):'—'}</td>`,
+            // [V4.66] 現役日均產值 cell = 本輪已實現損益 ÷ 現役天數
+            activeDailyOut: (() => {
+                const ad = getActiveDays(item.Symbol);
+                const ag = getActiveGain(item.Symbol);
+                if (ad <= 0) return `<td><span class="muted">—</span></td>`;
+                const ado = ag / ad;
+                const adoClass = ado > 0 ? 'pos' : ado < 0 ? 'neg' : 'muted';
+                return `<td class="${adoClass}${numbersHidden?' num-hidden':''}" style="font-size:.9rem;font-weight:700">${fmtUSD(ado)}</td>`;
+            })(),
             rollingOut: (() => {
                 const rc = rollingOut>0?'pos':rollingOut<0?'neg':'muted';
                 return `<td class="${rc}${numbersHidden?' num-hidden':''}" style="font-size:.9rem;font-weight:700">${rollingGain!==0?fmtUSD(rollingOut):'<span class="muted">—</span>'}</td>`;
@@ -3172,7 +4039,15 @@ function renderSnapshotChart() {
     const thisYearStr = String(new Date().getFullYear());
     const ytdSnapsAll = posSnapshots.filter(s=>s.date&&s.date.startsWith(thisYearStr)).sort((a,b)=>a.date.localeCompare(b.date));
     const ytdBaseSnap = ytdSnapsAll[0] || null;
-    const ytdBase = ytdBaseSnap ? (ytdBaseSnap.totalAssets || ytdBaseSnap.totalMV) : 0;
+    // [V4.68] 只修正 YTD 基準值，不動 taVals（趨勢線數字保持原始快照值）
+    // 原因：taVals 加 offset 會讓 tooltip 顯示假值，設計上只需要移動基準線位置
+    const overrideVal = ytdBaseOverride[thisYearStr];
+    // ytdBase = 嘉信輸入值（有的話）或系統第一筆快照值
+    const ytdBase = overrideVal && overrideVal > 0
+        ? overrideVal
+        : (ytdBaseSnap ? (ytdBaseSnap.totalAssets || ytdBaseSnap.totalMV) : 0);
+    // taVals 完全不加 offset，保持原始值
+    const taValsAdj = taVals;
     const hasCash = taVals.some(v=>v>0);
 
     // 網格
@@ -3208,14 +4083,14 @@ function renderSnapshotChart() {
             ctx.beginPath();
             ctx.moveTo(toX(ytdStart), ytdBaseY);
             for (let i = ytdStart; i < filtered.length; i++) {
-                ctx.lineTo(toX(i), toY(taVals[i]));
+                ctx.lineTo(toX(i), toY(taValsAdj[i]));
             }
             // 回到基準線
             for (let i = filtered.length-1; i >= ytdStart; i--) {
                 ctx.lineTo(toX(i), ytdBaseY);
             }
             ctx.closePath();
-            const lastTA = taVals[taVals.length-1] || 0;
+            const lastTA = taValsAdj[taValsAdj.length-1] || 0;
             ctx.fillStyle = lastTA >= ytdBase ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)';
             ctx.fill();
         }
@@ -3246,7 +4121,7 @@ function renderSnapshotChart() {
     if (hasCash) {
         ctx.strokeStyle='#15803d'; ctx.lineWidth=2.5;
         ctx.beginPath();
-        taVals.forEach((v,i)=>{ i===0?ctx.moveTo(toX(i),toY(v)):ctx.lineTo(toX(i),toY(v)); });
+        taValsAdj.forEach((v,i)=>{ i===0?ctx.moveTo(toX(i),toY(v)):ctx.lineTo(toX(i),toY(v)); });
         ctx.stroke();
     }
 
@@ -3289,7 +4164,8 @@ function renderSnapshotChart() {
     // 圖例
     const lastSnap = filtered[filtered.length-1];
     const lastUR_ = lastSnap ? lastSnap.totalMV - lastSnap.totalCB : 0;
-    const lastTA_ = lastSnap ? (lastSnap.totalAssets || lastSnap.totalMV) : 0;
+    // [V4.68] lastTA_ 使用原始 taVals（不加 offset）
+    const lastTA_ = taVals[taVals.length-1] || 0;
     const ytdAmt = ytdBase > 0 ? lastTA_ - ytdBase : 0;
     const ytdPct_ = ytdBase > 0 ? (ytdAmt / ytdBase * 100) : 0;
     const backfilledCount = posSnapshots.filter(s=>s.backfilled).length;
@@ -3310,7 +4186,7 @@ function renderSnapshotChart() {
     canvas._ytdBase = ytdBase;
     canvas._ytdBaseDate = ytdBaseSnap ? ytdBaseSnap.date : null;
     canvas._filtered = filtered;
-    canvas._taVals = taVals;
+    canvas._taVals = taValsAdj;
     canvas._mvVals = mvVals;
     canvas._cbVals = cbVals;
     canvas._PAD = PAD; canvas._W = W; canvas._H = H;
@@ -3386,9 +4262,11 @@ function snapTooltipMove(e) {
     if (!tip) {
         tip = document.createElement('div');
         tip.id = 'snapTooltip';
-        tip.style.cssText = 'position:fixed;background:rgba(15,23,42,0.92);color:white;padding:10px 14px;border-radius:8px;font-size:.78rem;pointer-events:none;z-index:9999;min-width:180px;line-height:1.8;box-shadow:0 4px 16px rgba(0,0,0,.3)';
         document.body.appendChild(tip);
     }
+
+    const isMobile = window.innerWidth <= 640;
+
     tip.innerHTML = `
         <div style="font-weight:700;margin-bottom:4px;color:#94a3b8">${snap.date}</div>
         <div>總資產：<span style="color:#4ade80;font-weight:600">${fmt(ta)}</span></div>
@@ -3397,15 +4275,39 @@ function snapTooltipMove(e) {
         <div>未實現：<span style="${ur>=0?'color:#4ade80':'color:#f87171'}">${ur>=0?'+':''}${fmt(Math.abs(ur))}</span></div>
         ${ytdAmt!==null?`<div style="border-top:1px solid rgba(255,255,255,.15);margin-top:4px;padding-top:4px">YTD：<span style="${ytdAmt>=0?'color:#4ade80':'color:#f87171'};font-weight:700">${ytdAmt>=0?'+':''}${fmt(Math.abs(ytdAmt))} (${fmtPct(ytdPct)})</span></div>`:''}
     `;
-    tip.style.display = 'block';
-    tip.style.left = (e.clientX + 16) + 'px';
-    tip.style.top  = (e.clientY - 60) + 'px';
+
+    if (isMobile) {
+        // [V4.66] 手機版：底部固定顯示，不跟著手指走
+        // 原因：手機螢幕小，跟著觸控點的 tooltip 很容易超出畫面
+        tip.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(15,23,42,0.96);color:white;padding:12px 16px;font-size:.82rem;pointer-events:none;z-index:9999;line-height:2;box-shadow:0 -4px 16px rgba(0,0,0,.3);display:block;border-top:1px solid rgba(255,255,255,.1)';
+    } else {
+        // [V4.66] 桌機版：四方向自動翻轉，偵測邊界超出
+        // 原因：原本固定右上，點最右側時 tooltip 超出視窗
+        tip.style.cssText = 'position:fixed;background:rgba(15,23,42,0.92);color:white;padding:10px 14px;border-radius:8px;font-size:.78rem;pointer-events:none;z-index:9999;min-width:180px;line-height:1.8;box-shadow:0 4px 16px rgba(0,0,0,.3);display:block';
+        tip.style.left = '0'; tip.style.top = '0'; // 先顯示才能量測
+        tip.style.visibility = 'hidden'; tip.style.display = 'block';
+        const tipW = tip.offsetWidth, tipH = tip.offsetHeight;
+        tip.style.visibility = 'visible';
+
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const offset = 16;
+        // 水平：先嘗試右側，不夠就改左側，夾緊邊界
+        let left = e.clientX + offset;
+        if (left + tipW > vw - 8) left = e.clientX - tipW - offset;
+        left = Math.max(8, Math.min(left, vw - tipW - 8));
+        // 垂直：先嘗試上方，不夠就改下方，夾緊邊界
+        let top = e.clientY - tipH - offset;
+        if (top < 8) top = e.clientY + offset;
+        top = Math.max(8, Math.min(top, vh - tipH - 8));
+
+        tip.style.left = left + 'px';
+        tip.style.top  = top + 'px';
+    }
 }
 
 function snapTooltipTouch(e) {
     if (!e.touches.length) return;
     const touch = e.touches[0];
-    // 模擬 mousemove event 結構傳給同一個函數
     snapTooltipMove({
         currentTarget: e.currentTarget,
         clientX: touch.clientX,
@@ -3794,10 +4696,15 @@ let numbersHidden = false;
 const KPI_DEFS = [
     { key:'marketValue',   label:'持股市值',      color:'blue',  valId:'kpiMarketValue',    subId:'kpiMarketSub',      subDefault:'—' },
     { key:'avgOutput',     label:'平均日產值',     color:'green', valId:'kpiAvgOutput',      subId:null,                subDefault:'已實現 per day' },
-    { key:'ytd',           label:'年初至今 YTD%',  color:'blue',  valId:'kpiYTD',            subId:'kpiYTDSub',         subDefault:'總資產成長率' },
+    { key:'ytd',           label:'YTD%（年初至今總資產成長率）',  color:'blue',  valId:'kpiYTD',            subId:'kpiYTDSub',         subDefault:'總資產成長率' },
     { key:'totalAvgOutput',label:'總平均日產值',   color:'green', valId:'kpiTotalAvgOutput', subId:null,                subDefault:'含未實現 per day' },
     { key:'realized',      label:'總實現損益',     color:'green', valId:'kpiRealized',       subId:'kpiRealizedSub',    subDefault:'—' },
     { key:'unrealized',    label:'未實現損益',     color:'blue',  valId:'kpiUnrealized',     subId:'kpiUnrealizedSub',  subDefault:'需更新股價' },
+    // [V4.64] 新增兩個報酬率 KPI
+    // 原因：補充財務視角，讓使用者可看到已出場成績單與整體部位狀態
+    // 影響範圍：KPI 卡片、refreshKPI()、CSV 匯出、toggleHideNumbers 遮蔽清單
+    { key:'realizedReturn', label:'已實現報酬率',  color:'green', valId:'kpiRealizedReturn',  subId:'kpiRealizedReturnSub', subDefault:'累積實現損益 ÷ 成本基礎' },
+    { key:'totalReturn',    label:'總報酬率',      color:'blue',  valId:'kpiTotalReturn',     subId:'kpiTotalReturnSub',    subDefault:'(實現+未實現) ÷ 成本基礎' },
 ];
 const DEFAULT_KPI_ORDER = KPI_DEFS.map(d=>d.key);
 let kpiOrder = JSON.parse(localStorage.getItem('hunter_kpi_order') || 'null') || [...DEFAULT_KPI_ORDER];
@@ -3847,8 +4754,10 @@ function toggleHideNumbers() {
     btn.style.color = numbersHidden ? '#fbbf24' : '#d1d5db';
 
     // KPI 遮蔽
+    // [V4.64] 新增 kpiRealizedReturn、kpiTotalReturn 及其 Sub 到遮蔽清單
     ['kpiRealized','kpiAvgOutput','kpiTotalAvgOutput','kpiUnrealized','kpiMarketValue',
-     'kpiRealizedSub','kpiUnrealizedSub','kpiMarketSub','kpiYTD','kpiYTDSub'].forEach(id => {
+     'kpiRealizedSub','kpiUnrealizedSub','kpiMarketSub','kpiYTD','kpiYTDSub',
+     'kpiRealizedReturn','kpiRealizedReturnSub','kpiTotalReturn','kpiTotalReturnSub'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('num-hidden', numbersHidden);
     });
@@ -3858,6 +4767,12 @@ function toggleHideNumbers() {
      'annualRequiredDaily','annualCurrentDaily','annualStatusMsg',
      'annualForecastTotal','annualForecastPct','annualForecastGap','annualBaseline',
      'annualGoalInput','annualGoalPctInput'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('num-hidden', numbersHidden);
+    });
+
+    // [V4.68] 基準值校正面板遮蔽 — 輸入框和狀態文字
+    ['ytdBaseInput','ytdBaseStatus'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('num-hidden', numbersHidden);
     });
@@ -3927,7 +4842,7 @@ function doExportReport() {
     // 切回原帳戶
     activeUser = originalUser; loadCurrentUser();
     closeExportModal();
-    alert(`已匯出 ${selected.length} 個帳戶的報表`);
+    // [V4.67] 拿掉報表匯出 alert，靜默完成
 }
 
 function generateReportForUser(userName, today, isMerge=false) {
@@ -3943,15 +4858,38 @@ function generateReportForUser(userName, today, isMerge=false) {
         ? [`## 帳戶：${userName}`]
         : [`# 獵人追蹤戰情室 分析報表`, `# 匯出時間：${today}`, `# 帳戶：${userName}`, ``];
 
-    // 指標說明（每份報表都加入）
+    // [V4.65] 指標說明擴充 — 與使用說明「指標說明」分頁內容同步
+    // 原因：報表應包含完整指標定義，方便離線查閱，不需開啟程式
+    // 影響範圍：CSV 匯出報表的指標說明區塊
     const metricDesc = [
         ``,
         `## 指標說明`,
-        `日均產值,累積所有交易的總實現損益 ÷ 累積總持有天數。反映長期平均每天的獲利能力`,
-        `滾動日均產值,近365天內已實現損益 ÷ 365。分母固定，各標的可公平比較，更能反映當前產線效能`,
-        `產值貢獻%,該標的滾動日均產值 ÷ 全場滾動日均產值總和。若產值貢獻% > 持股占比% 代表高效標的；反之為低效佔資`,
-        `總日均產值,（累積實現損益 + 目前未實現損益）÷ 累積持有天數。反映含帳面獲利的整體效率`,
-        `YTD%,（目前總資產 - 年初總資產）÷ 年初總資產。衡量今年整體帳戶的資產成長率`,
+        ``,
+        `### KPI 總覽`,
+        `持股市值,目前所有持股的即時市值總和（股數 × 即時股價）`,
+        `平均日產值,累積所有交易的總實現損益 ÷ 累積總持有天數。反映長期平均每天的獲利能力。注意：持有越久天數越大，分母膨脹導致數值被稀釋，不同持有期的標的無法公平比較`,
+        `YTD%（年初至今總資產成長率）,（目前總資產 - 年初總資產 - 淨外部入金）÷ 年初總資產 × 100%。從今年第一個有記錄的日期至今，整體帳戶的資產成長率。包含持股市值變化＋現金＋已實現損益。需匯入 Transactions CSV 才能自動扣除外部入金，否則數值可能偏高`,
+        `總平均日產值,（累積實現損益 + 目前未實現損益）÷ 累積持有天數。把帳面獲利也算進去，反映含浮盈的整體持倉效率。需更新股價後才會顯示，隨股價波動`,
+        `總實現損益,所有已結單交易的損益加總（落袋為安的真實利潤）`,
+        `未實現損益,目前持倉的帳面損益（即時市值 - 持倉成本）。需更新股價後才會顯示`,
+        `已實現報酬率,累積實現損益 ÷ 累積成本基礎 × 100%。衡量出場成績單的整體報酬率，不受當前股價波動影響`,
+        `總報酬率,（累積實現損益 + 未實現損益）÷ 累積成本基礎 × 100%。假設今天全出場的總報酬率。隨股價每天波動，反映帳戶整體健康度`,
+        ``,
+        `### 周轉表欄位`,
+        `日均產值,累積實現損益 ÷ 累積持有天數。資金使用效率指標，數值越高代表每天產出越多`,
+        `滾動日均產值（近365天）,近365天內已實現損益 ÷ 365。分母固定365天，所有標的基準相同可公平橫向比較，更能反映當前產線效能。若某標的近一年沒有賣出紀錄則為 0`,
+        `產值貢獻%,該標的滾動日均產值 ÷ 全場滾動日均產值總和 × 100%。這個標的佔整體產線產出的比重。產值貢獻% > 持股占比% → 高效標的（綠燈）；產值貢獻% < 持股占比% → 低效佔資（紅燈）`,
+        `總日均產值（含未實現）,（累積實現損益 + 目前未實現損益）÷ 累積持有天數。含浮盈的標的個別效率，需更新股價後才會顯示`,
+        `周轉天數,所有已結單交易的持有天數累計加總（資金實際被佔用的總時間成本）`,
+        `累計佔用天數,同「周轉天數」— 所有已結單交易的持有天數加總，衡量資金被佔用的歷史總時間成本`,
+        `現役天數,從本輪最近一次進場日（若有歸零記錄則從歸零後再買入日）到今天的日曆天數，反映這輪持倉的實際在廠時間`,
+        `歷史日均產值,累積實現損益 ÷ 累計佔用天數。長期資金使用效率，持有越久分母越大，不同標的需注意持有期差異`,
+        `現役日均產值,本輪已實現損益 ÷ 現役天數。這輪進廠以來平均每天貢獻多少，用日曆跨度為分母，空窗期會稀釋效能`,
+        `未實現%,（即時股價 - 均成本）÷ 均成本 × 100%。目前這筆持倉的帳面報酬率`,
+        `持股占比%,該標的持倉市值 ÷ 全場持倉市值總和 × 100%`,
+        ``,
+        `### 警示說明`,
+        `呆滯料預警,觸發條件：周轉天數 > 30 天 且 未實現% 介於 -2% ~ +2%。資金被壓住超過一個月但股價橫盤不動，類似工廠的呆滯庫存。建議評估是否減倉釋放資金投入高效標的`,
         ``,
     ];
 
@@ -4004,7 +4942,7 @@ function generateReportForUser(userName, today, isMerge=false) {
         `總資產,$${(totalMV+currentCash).toFixed(2)}`,
         ``,
         `## 持股明細`,
-        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,周轉天數,日均產值,滾動日均產值(近365天),產值貢獻%,總日均產值,52W低點,52W高點,52W位置%,目標售價,進場理由,停損價`
+        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,累計佔用天數,現役天數,歷史日均產值,現役日均產值,滾動日均產值(近365天),產值貢獻%,總日均產值,52W低點,52W高點,52W位置%,目標售價,進場理由,停損價`
     ].join('\n');
 
     // 計算滾動基準日
@@ -4024,6 +4962,43 @@ function generateReportForUser(userName, today, isMerge=false) {
     }
     const grandRolling = inventory.reduce((sum,it) => sum + getReportRollingGain(it.Symbol)/365, 0);
 
+    // [V4.66] 現役天數/現役損益計算（CSV 報表用）
+    function getReportActiveDays(sym) {
+        const symTrades = rawTrades.filter(t => t.sym === sym);
+        if (!symTrades.length) return 0;
+        const parseDate = (d) => {
+            if (!d) return null;
+            const p = d.split('/');
+            return p.length===3 ? `${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}` : d;
+        };
+        const sortedT = [...symTrades].sort((a,b)=>(parseDate(a.openDate)||'').localeCompare(parseDate(b.openDate)||''));
+        const closeDates = sortedT.map(t=>parseDate(t.closeDate)).filter(Boolean).sort();
+        const openDates  = sortedT.map(t=>parseDate(t.openDate)).filter(Boolean).sort();
+        const lastClose  = closeDates[closeDates.length-1]||'';
+        const newRoundOpens = openDates.filter(d=>d>lastClose);
+        const startDate = newRoundOpens.length>0 ? newRoundOpens[0] : (openDates[0]||'');
+        if (!startDate) return 0;
+        const today = new Date().toISOString().slice(0,10);
+        return Math.max(0, Math.ceil((new Date(today)-new Date(startDate))/86400000));
+    }
+    function getReportActiveGain(sym) {
+        const symTrades = rawTrades.filter(t => t.sym === sym);
+        if (!symTrades.length) return 0;
+        const parseDate = (d) => {
+            if (!d) return null;
+            const p = d.split('/');
+            return p.length===3 ? `${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}` : d;
+        };
+        const sortedT = [...symTrades].sort((a,b)=>(parseDate(a.openDate)||'').localeCompare(parseDate(b.openDate)||''));
+        const closeDates = sortedT.map(t=>parseDate(t.closeDate)).filter(Boolean).sort();
+        const openDates  = sortedT.map(t=>parseDate(t.openDate)).filter(Boolean).sort();
+        const lastClose  = closeDates[closeDates.length-1]||'';
+        const newRoundOpens = openDates.filter(d=>d>lastClose);
+        const startDate = newRoundOpens.length>0 ? newRoundOpens[0] : (openDates[0]||'');
+        if (!startDate) return 0;
+        return symTrades.filter(t=>(parseDate(t.openDate)||'')>=startDate).reduce((s,t)=>s+(t.gain||0),0);
+    }
+
     const rows = inventory.map(item => {
         const s = stats[item.Symbol]||{gain:0,days:0};
         const p = prices[item.Symbol];
@@ -4032,6 +5007,10 @@ function generateReportForUser(userName, today, isMerge=false) {
         const up = cb>0?(ur/cb*100).toFixed(1):'—';
         const wt = totalMV>0?(mv/totalMV*100).toFixed(1):'—';
         const do_ = s.days>0?(s.gain/s.days).toFixed(2):'0';
+        // [V4.66] 現役天數、現役日均產值
+        const ad = getReportActiveDays(item.Symbol);
+        const ag = getReportActiveGain(item.Symbol);
+        const ado = ad>0?(ag/ad).toFixed(2):'—';
         const rg = getReportRollingGain(item.Symbol);
         const ro = (rg/365).toFixed(2);
         const contrib = grandRolling!==0 ? ((rg/365)/grandRolling*100).toFixed(1)+'%' : '—';
@@ -4040,7 +5019,8 @@ function generateReportForUser(userName, today, isMerge=false) {
         const pos52 = (w52&&p)?((p-w52.low52)/(w52.high52-w52.low52)*100).toFixed(1):'—';
         const note = notes[item.Symbol]||{};
         return [item.Symbol,sh,co.toFixed(2),p?p.toFixed(2):'—',cb.toFixed(2),
-            ur.toFixed(2),up+'%',mv.toFixed(2),wt+'%',s.gain.toFixed(2),s.days,do_,
+            ur.toFixed(2),up+'%',mv.toFixed(2),wt+'%',s.gain.toFixed(2),
+            s.days, ad, do_, ado,
             ro,contrib,tdo,
             w52?w52.low52.toFixed(2):'—',w52?w52.high52.toFixed(2):'—',pos52+'%',
             note.target||'—',note.entryReason||'—',note.stopLoss||'—'].join(',');
@@ -4151,7 +5131,35 @@ function confirmAllRebuild() {
 }
 
 function confirmRebuild() {
+    // [V4.83] 重建前確認
     if (!confirm('⚠️ 重建歷史快照\n\n此功能僅供第一次設定使用。\n若趨勢圖已有完整資料，重建可能會影響歷史數據。\n\n確定要繼續嗎？')) return;
+
+    // [V4.83] 股數驗證：有持倉資料才比對，無持倉直接重建
+    // 原因：快照是參考值，股數不一致提示讓 user 自行判斷，不強制擋住
+    // 影響範圍：confirmRebuild()，嘉信版和通用版共用
+    if (inventory.length > 0 && txnData.length > 0) {
+        const dh = buildDailyHoldings();
+        const lastDate = Object.keys(dh).sort().pop();
+        if (lastDate) {
+            const lastH = dh[lastDate];
+            const mismatches = [];
+            inventory.forEach(item => {
+                const sym = item.Symbol;
+                const invQty = item.Shares || 0;
+                const txnQty = lastH[sym] ? lastH[sym].qty : 0;
+                const diff = Math.abs(invQty - txnQty);
+                if (diff > 0.5) {
+                    mismatches.push(`${sym}：持倉 ${invQty.toFixed(4)} 股 / 交易紀錄計算 ${txnQty.toFixed(4)} 股（差 ${diff.toFixed(4)} 股）`);
+                }
+            });
+            if (mismatches.length > 0) {
+                const msg = '⚠️ 偵測到股數差異\n\n' + mismatches.join('\n') +
+                    '\n\n可能有股票分割記錄未對應，重建結果可能不準確。\n\n確定要繼續重建？';
+                if (!confirm(msg)) return;
+            }
+        }
+    }
+
     buildSnapshotsFromTxn();
 }
 
@@ -4176,6 +5184,20 @@ function updateHeaderLayout() {
     document.querySelectorAll('.btn-desktop-only').forEach(el => {
         el.style.display = isMobile ? 'none' : '';
     });
+    // [V4.64] 手機版動態計算 page-tabs top 值
+    // 原因：手機版 user-bar 帳戶多時換行，高度不固定，需動態計算避免重疊
+    // 影響範圍：手機版 page-tabs 定位
+    if (isMobile) {
+        const userBar = document.querySelector('.user-bar');
+        const pageTabs = document.querySelector('.page-tabs');
+        if (userBar && pageTabs) {
+            const userBarH = userBar.offsetHeight;
+            pageTabs.style.top = (52 + userBarH) + 'px';
+        }
+    } else {
+        const pageTabs = document.querySelector('.page-tabs');
+        if (pageTabs) pageTabs.style.top = '';
+    }
 }
 updateHeaderLayout();
 window.addEventListener('resize', updateHeaderLayout);
@@ -4186,14 +5208,727 @@ function updateFooterTime() {
 updateFooterTime(); setInterval(updateFooterTime,1000);
 
 // ══════════════════════════════════════════════════════
+//  [V4.70] 通用 CSV 匯入模組
+//  原因：支援 Schwab 以外券商的自訂格式欄位對應匯入
+//  影響範圍：inventory、stats、rawTrades（含 source 欄位）
+// ══════════════════════════════════════════════════════
+
+// [V4.72] CSV_FIELD_DEFS 修正
+// 原因：gainloss.shares 無用死欄位移除；txn.symbol/qty 為快照重建必要欄位，改為必填
+// 影響範圍：通用版 ⑤⑥ 欄位對應步驟，不影響嘉信版
+const CSV_FIELD_DEFS = {
+    positions: [
+        { key: 'symbol',  label: '股票代號',   required: true,  hint: 'Schwab: Symbol'         },
+        { key: 'shares',  label: '股數',       required: true,  hint: 'Schwab: Qty (Quantity)'  },
+        { key: 'cost',    label: '均成本/股',  required: true,  hint: 'Schwab: Cost/Share'      },
+        // [V4.96] 新增選填 price 欄，對齊嘉信版：匯入後即可顯示 KPI，API 當機時亦可作備用快取
+        { key: 'price',   label: '現價',       required: false, hint: '選填：有填則匯入後 KPI 即時顯示' },
+    ],
+    gainloss: [
+        { key: 'symbol',    label: '股票代號',  required: true,  hint: 'Schwab: Symbol'          },
+        { key: 'openDate',  label: '買入日期',  required: true,  hint: 'Schwab: Opened Date'     },
+        { key: 'closeDate', label: '賣出日期',  required: true,  hint: 'Schwab: Closed Date'     },
+        { key: 'gain',      label: '損益金額',  required: true,  hint: 'Schwab: Gain/Loss ($)'   },
+    ],
+    txn: [
+        { key: 'date',    label: '日期',       required: true,  hint: 'Schwab: Date'            },
+        { key: 'action',  label: '交易類型',   required: true,  hint: 'Schwab: Action'          },
+        { key: 'symbol',  label: '股票代號',   required: true,  hint: 'Schwab: Symbol'          },
+        { key: 'qty',     label: '數量',       required: true,  hint: 'Schwab: Quantity'        },
+        { key: 'price',   label: '單價',       required: false, hint: 'Schwab: Price（選填，無則現金倒推用 Amount）' },
+        { key: 'amount',  label: '金額',       required: false, hint: 'Schwab: Amount（選填，有助現金倒推）' },
+    ]
+};
+
+const CSV_MODAL_TITLES = {
+    positions: '④ 自訂持倉匯入',
+    gainloss:  '⑤ 自訂已實現損益匯入',
+    txn:       '⑥ 自訂交易紀錄匯入',
+};
+
+// ── 互斥鎖定邏輯 ──
+// 判斷哪邊有資料，disable 對應入口
+function checkImportLock() {
+    // [V4.70fix] 判斷 Schwab ①②③ 有無資料：排除 custom source
+    const hasSchwab = (inventory.length > 0 && inventory.some(i => !i.source || i.source === 'schwab')) ||
+                      Object.keys(stats).length > 0 && rawTrades.some(t => !t.source || t.source === 'schwab') ||
+                      txnData.some(t => !t.source || t.source === 'schwab');
+    // 判斷通用 ④⑤⑥ 有無資料
+    const hasCustom = inventory.some(i => i.source === 'custom') ||
+                      rawTrades.some(t => t.source === 'custom') ||
+                      txnData.some(t => t.source === 'custom');
+
+    const schwabLockMsg   = document.getElementById('schwabLockMsg');
+    const customImportWrap = document.getElementById('customImportWrap');
+
+    // Schwab 有資料 → 鎖通用
+    if (hasSchwab && !hasCustom) {
+        if (schwabLockMsg)    schwabLockMsg.style.display = '';
+        if (customImportWrap) customImportWrap.classList.add('custom-import-lock');
+    } else {
+        if (schwabLockMsg)    schwabLockMsg.style.display = 'none';
+        if (customImportWrap) customImportWrap.classList.remove('custom-import-lock');
+    }
+
+    // 通用有資料 → 鎖 Schwab ①②③
+    const schwabSection = document.querySelector('.two-col.section-gap');
+    const txnSection    = document.querySelector('#txnFile')?.closest('div[style*="margin-bottom"]');
+    if (hasCustom && !hasSchwab) {
+        // disable Schwab 上傳區
+        ['inventoryFile','statementFile','txnFile'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.disabled = true; el.title = '已匯入通用格式資料，Schwab 入口已鎖定'; }
+        });
+    } else {
+        ['inventoryFile','statementFile','txnFile'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.disabled = false; el.title = ''; }
+        });
+    }
+
+    // 更新通用按鈕狀態
+    updateCustomBtnStatus();
+}
+
+function updateCustomBtnStatus() {
+    // positions 按鈕
+    const hasPos = inventory.length > 0 && inventory.some(i => i.source === 'custom');
+    const btnPos = document.getElementById('btnCustomPos');
+    const stPos  = document.getElementById('customPosStatus');
+    if (btnPos) btnPos.classList.toggle('has-data', hasPos);
+    if (stPos)  stPos.textContent = hasPos ? `✓ ${inventory.filter(i=>i.source==='custom').length}筆` : '';
+
+    // gainloss 按鈕
+    const hasGL = rawTrades.some(t => t.source === 'custom');
+    const btnGL = document.getElementById('btnCustomGL');
+    const stGL  = document.getElementById('customGLStatus');
+    if (btnGL) btnGL.classList.toggle('has-data', hasGL);
+    if (stGL)  stGL.textContent = hasGL ? `✓ ${rawTrades.filter(t=>t.source==='custom').length}筆` : '';
+
+    // txn 按鈕
+    const hasTxn = txnData.some(t => t.source === 'custom');
+    const btnTxn = document.getElementById('btnCustomTxn');
+    const stTxn  = document.getElementById('customTxnStatus');
+    if (btnTxn) btnTxn.classList.toggle('has-data', hasTxn);
+    if (stTxn)  stTxn.textContent = hasTxn ? `✓ ${txnData.filter(t=>t.source==='custom').length}筆` : '';
+}
+
+// ── Modal 開關 ──
+function openCsvImportModal(type) {
+    _csvImport = { type, step: 1, headers: [], rows: [], mapping: {}, parsedData: [], skipped: [], matchedFormat: null };
+    document.getElementById('csvModalTitle').textContent = CSV_MODAL_TITLES[type];
+    const descMap = {
+        positions: '上傳持倉 CSV（含股票代號、股數、均成本欄位）',
+        gainloss:  '上傳已實現損益 CSV（含股票代號、買入日期、賣出日期、損益金額欄位）',
+        txn:       '上傳交易紀錄 CSV（選填，用於重建歷史快照）'
+    };
+    document.getElementById('csvStep1Desc').textContent = descMap[type];
+    document.getElementById('csvUploadInput').value = '';
+    document.getElementById('savedFormatsArea').style.display = 'none';
+    csvSetStep(1);
+    document.getElementById('csvImportModal').style.display = 'flex';
+}
+
+function closeCsvImportModal() {
+    document.getElementById('csvImportModal').style.display = 'none';
+    document.getElementById('csvUploadInput').value = '';
+}
+
+function csvSetStep(n) {
+    _csvImport.step = n;
+    [1,2,3,4].forEach(i => {
+        const el = document.getElementById('csvStep'+i);
+        if (el) el.style.display = (i === n) ? '' : 'none';
+        const stepEl = document.getElementById('step'+i);
+        if (stepEl) {
+            stepEl.classList.remove('active','done');
+            if (i < n)  stepEl.classList.add('done');
+            if (i === n) stepEl.classList.add('active');
+        }
+    });
+    // 控制按鈕
+    const btnBack   = document.getElementById('csvBtnBack');
+    const btnNext   = document.getElementById('csvBtnNext');
+    const btnImport = document.getElementById('csvBtnImport');
+    const btnDone   = document.getElementById('csvBtnDone');
+    if (btnBack)   btnBack.style.display   = (n > 1 && n < 4) ? '' : 'none';
+    if (btnNext)   btnNext.style.display   = (n === 2) ? '' : 'none';
+    if (btnImport) btnImport.style.display = (n === 3) ? '' : 'none';
+    if (btnDone)   btnDone.style.display   = (n === 4) ? '' : 'none';
+}
+
+function csvStepBack() {
+    if (_csvImport.step > 1) csvSetStep(_csvImport.step - 1);
+}
+
+function csvStepNext() {
+    if (_csvImport.step === 2) {
+        // 驗證必填欄位
+        const defs = CSV_FIELD_DEFS[_csvImport.type];
+        const missing = defs.filter(d => d.required && !_csvImport.mapping[d.key]);
+        if (missing.length) {
+            alert('請對應必填欄位：' + missing.map(d=>d.label).join('、'));
+            return;
+        }
+        // [V4.71] txn 類型：只驗證必填的買入/賣出，其餘選填不強制
+        // 原因：select 改版後，股息再投入/股票分割/入金為選填，不應阻擋下一步
+        // 影響範圍：通用版 ⑥ step2 → step3 驗證，不影響嘉信版
+        if (_csvImport.type === 'txn') {
+            const requiredAm = ['buy', 'sell'];
+            const amLabels = { buy: '買入', sell: '賣出' };
+            const amMissing = requiredAm.filter(k => !document.getElementById('am-' + k)?.value);
+            if (amMissing.length) {
+                alert('請對應必填動作：' + amMissing.map(k => amLabels[k]).join('、'));
+                return;
+            }
+            // 收集動作對應值（空值也存，代表不對應）
+            _csvImport.actionMapping = {};
+            ['buy','sell','reinvest','split','stocksplit','wire'].forEach(k => {
+                _csvImport.actionMapping[k] = document.getElementById('am-' + k)?.value || '';
+            });
+        }
+        renderPreview();
+        csvSetStep(3);
+    }
+}
+
+// ── STEP 1: 上傳 CSV ──
+function onCustomCsvUpload(input) {
+    const file = input.files[0]; if (!file) return;
+    if (typeof Papa === 'undefined') { alert('PapaParse 未載入，請重新整理頁面'); return; }
+    Papa.parse(file, {
+        skipEmptyLines: true,
+        complete: function(results) {
+            if (!results.data || results.data.length < 2) {
+                alert('CSV 檔案內容不足，至少需要標頭行和一筆資料'); return;
+            }
+
+            // [V4.70fix] 智慧標頭偵測：掃前 10 行
+            // 優先找含 "Symbol" 的行；找不到則用欄位數最多的行
+            const scanRows = results.data.slice(0, 10);
+            let headerIdx = -1;
+
+            headerIdx = scanRows.findIndex(row =>
+                row.some(c => /^symbol$/i.test((c||'').toString().trim()))
+            );
+
+            if (headerIdx === -1) {
+                let maxCols = 0;
+                scanRows.forEach((row, i) => {
+                    const cols = row.filter(c => (c||'').toString().trim()).length;
+                    if (cols > maxCols) { maxCols = cols; headerIdx = i; }
+                });
+            }
+
+            if (headerIdx === -1) { alert('無法偵測到標頭行，請確認 CSV 格式'); return; }
+
+            _csvImport.headers = results.data[headerIdx].map(h => (h||'').toString().trim()).filter(Boolean);
+            _csvImport.rows    = results.data.slice(headerIdx + 1);
+            _csvImport.mapping = {}; // 清空對應，等使用者主動選格式或手動選
+
+            if (!_csvImport.headers.length) { alert('標頭行為空，請確認 CSV 格式'); return; }
+            if (!_csvImport.rows.length)    { alert('標頭之後沒有資料行'); return; }
+
+            // [V4.70fix] 顯示已存格式按鈕讓使用者主動選擇，不自動套入
+            renderSavedFormatButtons();
+
+            // 渲染欄位對應（空白，等使用者選格式或手動填）
+            renderFieldMapper();
+            csvSetStep(2);
+        },
+        error: e => alert('CSV 解析失敗：' + e.message)
+    });
+}
+
+// [V4.70fix] 顯示已存格式按鈕（在 Step 2 最上方）
+function renderSavedFormatButtons() {
+    const { type } = _csvImport;
+    const typeNames = { positions:'持倉', gainloss:'已實現損益', txn:'交易紀錄' };
+
+    // 找這個 type 有存過的格式名稱
+    const matchingFormats = Object.entries(csvFormats)
+        .filter(([name, fmt]) => fmt[type] && Object.keys(fmt[type]).length > 0)
+        .map(([name]) => name);
+
+    const area = document.getElementById('savedFormatsArea');
+    const list = document.getElementById('savedFormatsList');
+    if (!area || !list) return;
+
+    if (matchingFormats.length === 0) {
+        area.style.display = 'none';
+        return;
+    }
+
+    const labelEl = area.querySelector('.format-area-label');
+    if (labelEl) labelEl.textContent = `🗂 已存「${typeNames[type]}」格式（點選套入欄位對應）：`;
+
+    list.innerHTML = matchingFormats.map(name =>
+        `<button class="btn btn-outline btn-sm" style="font-size:.75rem;margin:2px"
+            onclick="applyFormat('${name}')">📋 ${name}</button>`
+    ).join('');
+    area.style.display = '';
+}
+
+// 嘗試自動比對已存格式（欄位名稱完全一致才帶入）
+function tryAutoMatchFormat() {
+    _csvImport.matchedFormat = null;
+    const headerSet = new Set(_csvImport.headers);
+    const matches = [];
+
+    Object.entries(csvFormats).forEach(([name, fmt]) => {
+        const fmtData = fmt[_csvImport.type];
+        if (!fmtData) return;
+        // 計算匹配欄位數
+        const mapped = Object.values(fmtData).filter(v => v && v !== 'dateFormat' && headerSet.has(v));
+        const total  = Object.keys(fmtData).filter(k => k !== 'dateFormat').length;
+        if (mapped.length === total && total > 0) {
+            matches.push({ name, score: mapped.length, mapping: fmtData });
+        }
+    });
+
+    if (matches.length) {
+        // 取分數最高者
+        matches.sort((a,b) => b.score - a.score);
+        const best = matches[0];
+        _csvImport.matchedFormat = best.name;
+        // 帶入對應
+        const defs = CSV_FIELD_DEFS[_csvImport.type];
+        defs.forEach(d => {
+            if (best.mapping[d.key]) _csvImport.mapping[d.key] = best.mapping[d.key];
+        });
+        // 顯示已存格式提示
+        const area = document.getElementById('savedFormatsArea');
+        const list = document.getElementById('savedFormatsList');
+        if (area && list) {
+            list.innerHTML = matches.map(m =>
+                `<span class="diag-tag ${m.name===best.name?'diag-ok':'diag-info'}" style="cursor:pointer;margin:2px" onclick="applyFormat('${m.name}')">${m.name===best.name?'✓ ':''}${m.name}</span>`
+            ).join('');
+            area.style.display = '';
+        }
+    }
+}
+
+function applyFormat(name) {
+    const fmt = csvFormats[name]?.[_csvImport.type];
+    if (!fmt) return;
+    _csvImport.matchedFormat = name;
+    const defs = CSV_FIELD_DEFS[_csvImport.type];
+    _csvImport.mapping = {};
+    defs.forEach(d => { if (fmt[d.key]) _csvImport.mapping[d.key] = fmt[d.key]; });
+    // [V4.70] 帶入動作對應
+    if (fmt.actionMapping) {
+        _csvImport.actionMapping = { ...fmt.actionMapping };
+    }
+    renderFieldMapper();
+    // 高亮選中的格式按鈕
+    document.querySelectorAll('#savedFormatsList button').forEach(btn => {
+        btn.style.background = btn.textContent.includes(name) ? 'var(--blue-l)' : '';
+        btn.style.borderColor = btn.textContent.includes(name) ? 'var(--blue)' : '';
+        btn.style.color = btn.textContent.includes(name) ? 'var(--blue)' : '';
+    });
+}
+
+// ── STEP 2: 欄位對應 ──
+function renderFieldMapper() {
+    const defs    = CSV_FIELD_DEFS[_csvImport.type];
+    const headers = _csvImport.headers.filter(h => h); // 過濾空白欄位名稱
+    const body    = document.getElementById('fieldMapperBody');
+    if (!body) return;
+
+    const noneOpt = `<option value="">— 不對應 —</option>`;
+    body.innerHTML = defs.map(d => {
+        const selected = _csvImport.mapping[d.key] || '';
+        // 自動比對：欄位名稱完全相符（不分大小寫）
+        const autoMatch = !selected && headers.find(h =>
+            h.toLowerCase().replace(/[\s_\-\/]/g,'') ===
+            d.key.toLowerCase().replace(/[\s_\-\/]/g,'')
+        );
+        const finalSelected = selected || autoMatch || '';
+        if (autoMatch && !_csvImport.mapping[d.key]) _csvImport.mapping[d.key] = autoMatch;
+
+        const opts = headers.map(h =>
+            `<option value="${h}" ${h===finalSelected?'selected':''}>${h}</option>`
+        ).join('');
+        return `<div class="field-row">
+            <div class="field-label">
+                ${d.label}${d.required?'<span class="field-required">*</span>':''}
+                ${d.hint ? `<div style="font-size:.65rem;color:var(--text3);font-weight:400;margin-top:2px">${d.hint}</div>` : ''}
+            </div>
+            <select class="field-select" data-key="${d.key}" onchange="onFieldMapChange(this)">
+                ${noneOpt}${opts}
+            </select>
+        </div>`;
+    }).join('');
+
+    // [V4.71] txn 類型：掃 Action 欄唯一值填充下拉選單，並自動比對常見名稱
+    // 原因：input text 改為 select，選項來自 CSV 實際內容，避免手動輸入錯誤
+    // 影響範圍：通用版 ⑥ 交易紀錄匯入，不影響嘉信版 ①②③
+    const actionSection = document.getElementById('actionMappingSection');
+    if (actionSection) {
+        actionSection.style.display = _csvImport.type === 'txn' ? '' : 'none';
+        if (_csvImport.type === 'txn') {
+            // 取得 Action 欄的所有唯一值
+            const actionColName = _csvImport.mapping['action'] || '';
+            const actionValues = [];
+            if (actionColName) {
+                const actionIdx = headers.indexOf(actionColName);
+                if (actionIdx >= 0) {
+                    const seen = new Set();
+                    _csvImport.rows.forEach(row => {
+                        const v = (row[actionIdx] || '').toString().trim();
+                        if (v && !seen.has(v)) { seen.add(v); actionValues.push(v); }
+                    });
+                }
+            }
+
+            // 自動比對規則：常見券商名稱對應
+            // [V4.73] split/stocksplit 拆成兩個獨立 key
+            const autoMatchRules = {
+                buy:        ['buy', 'purchase', 'bought', '買入', '買進'],
+                sell:       ['sell', 'sale', 'sold', '賣出', '賣掉'],
+                reinvest:   ['reinvest shares', 'reinvest', 'dividend reinvest', 'drip'],
+                split:      ['journaled shares', 'internal transfer'],
+                stocksplit: ['stock split', 'split', 'forward split'],
+                wire:       ['wire received', 'wire', 'deposit', 'ach', 'transfer in', 'external transfer', '入金'],
+            };
+
+            const noneOpt = '<option value="">— 不對應 —</option>';
+            ['buy','sell','reinvest','split','stocksplit','wire'].forEach(k => {
+                const sel = document.getElementById('am-' + k);
+                if (!sel) return;
+                // 重建選項
+                sel.innerHTML = noneOpt + actionValues.map(v =>
+                    `<option value="${v}">${v}</option>`
+                ).join('');
+                // 已存格式帶入優先
+                const saved = _csvImport.actionMapping?.[k];
+                if (saved && actionValues.includes(saved)) {
+                    sel.value = saved;
+                } else {
+                    // 自動比對
+                    const rules = autoMatchRules[k] || [];
+                    const matched = actionValues.find(v =>
+                        rules.some(r => v.toLowerCase() === r.toLowerCase())
+                    );
+                    if (matched) sel.value = matched;
+                }
+            });
+        }
+    }
+}
+
+function onFieldMapChange(sel) {
+    _csvImport.mapping[sel.dataset.key] = sel.value;
+    // [V4.71] 若改變的是 action 欄位對應，重新掃唯一值更新動作對應下拉選單
+    // 原因：使用者可能先對應 action 欄，下拉選項才能正確產生
+    if (sel.dataset.key === 'action' && _csvImport.type === 'txn') {
+        renderFieldMapper();
+    }
+}
+
+// ── STEP 3: 預覽 ──
+function renderPreview() {
+    const { type, rows, mapping, headers } = _csvImport;
+    _csvImport.parsedData = [];
+    _csvImport.skipped    = [];
+
+    if (type === 'positions') {
+        rows.forEach((row, i) => {
+            const obj = headerObj(headers, row);
+            const sym = clean(obj[mapping.symbol]);
+            const sh  = pcn(obj[mapping.shares]);
+            const co  = pcn(obj[mapping.cost]);
+            if (!sym) { _csvImport.skipped.push({ i, reason: '股票代號空白' }); return; }
+            if (!sh)  { _csvImport.skipped.push({ i, reason: `${sym} 股數為 0` }); return; }
+            const pr = mapping.price ? pcn(obj[mapping.price]) : 0;
+            _csvImport.parsedData.push({ Symbol: sym, Shares: sh, Cost: co, Price: pr||0, source: 'custom' });
+        });
+    } else if (type === 'gainloss') {
+        rows.forEach((row, i) => {
+            const obj  = headerObj(headers, row);
+            const sym  = clean(obj[mapping.symbol]);
+            const gain = pgl(obj[mapping.gain]);
+            const od   = obj[mapping.openDate]  || '';
+            const cd   = obj[mapping.closeDate] || '';
+            if (!sym) { _csvImport.skipped.push({ i, reason: '股票代號空白' }); return; }
+            _csvImport.parsedData.push({ sym, gain, openDate: od, closeDate: cd,
+                days: calcDays(od, cd), source: 'custom' });
+        });
+    } else if (type === 'txn') {
+        // [V4.74] action 改用 trim() 不用 clean()，clean() 會強制大寫導致 buildDailyHoldings 比對失敗
+        // 原因：buildDailyHoldings 用 t.action === 'Buy'，若存成 'BUY' 永遠匹配不到
+        rows.forEach((row, i) => {
+            const obj    = headerObj(headers, row);
+            const date   = clean(obj[mapping.date]);
+            const action = (obj[mapping.action] || '').toString().trim();  // 保留原始大小寫
+            const sym    = clean(obj[mapping.symbol] || '');
+            const qty    = pcn(obj[mapping.qty]);
+            const price  = pcn(obj[mapping.price]);
+            const amount = pgl(obj[mapping.amount]);
+            if (!date)   { _csvImport.skipped.push({ i, reason: '日期空白' }); return; }
+            if (!action) { _csvImport.skipped.push({ i, reason: '交易類型空白' }); return; }
+            // 買賣類動作需要 symbol 和 qty（用原始值比對，不分大小寫）
+            const needsHolding = ['buy','sell','reinvest shares','journaled shares','stock split','internal transfer']
+                .includes(action.toLowerCase());
+            if (needsHolding && !sym) { _csvImport.skipped.push({ i, reason: `${action} 缺少股票代號` }); return; }
+            if (needsHolding && !qty) { _csvImport.skipped.push({ i, reason: `${action} 缺少數量` }); return; }
+            _csvImport.parsedData.push({
+                date: normalizeDate(date), action, amount,
+                symbol: sym, qty, price,
+                source: 'custom'
+            });
+        });
+    }
+
+    // 顯示摘要
+    const total   = rows.length;
+    const ok      = _csvImport.parsedData.length;
+    const skipped = _csvImport.skipped.length;
+    document.getElementById('previewSummary').textContent =
+        `共讀取 ${total} 筆，成功解析 ${ok} 筆，跳過 ${skipped} 筆`;
+
+    // 跳過原因（[V4.76] 說明 Journaled Shares / Internal Transfer 缺 symbol 是正常的）
+    const skipInfo = document.getElementById('previewSkipInfo');
+    if (skipInfo) {
+        if (skipped) {
+            const reasons = [...new Set(_csvImport.skipped.map(s=>s.reason))].join('、');
+            const hasExpected = reasons.includes('Journaled Shares') || reasons.includes('Internal Transfer');
+            skipInfo.innerHTML = `跳過原因：${reasons}` +
+                (hasExpected ? '<br><span style="color:var(--text3);font-size:.7rem">※ Journaled Shares / Internal Transfer 沒有股票代號屬正常，不影響計算</span>' : '');
+        } else {
+            skipInfo.textContent = '';
+        }
+    }
+
+    // 預覽前三筆
+    const preview3 = _csvImport.parsedData.slice(0, 3);
+    const keys     = Object.keys(preview3[0] || {}).filter(k => k !== 'source');
+    const wrap     = document.getElementById('previewTableWrap');
+    if (wrap && preview3.length) {
+        wrap.innerHTML = `<table class="preview-tbl">
+            <thead><tr>${keys.map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+            <tbody>${preview3.map(r=>`<tr>${keys.map(k=>`<td>${r[k]??''}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>`;
+    } else if (wrap) {
+        wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3)">無有效資料可預覽</div>';
+    }
+}
+
+// ── STEP 4: 確認匯入 ──
+function confirmCustomImport() {
+    const { type, parsedData } = _csvImport;
+    if (!parsedData.length) { alert('沒有可匯入的資料'); return; }
+
+    if (type === 'positions') {
+        // 清除舊的 custom 持倉，保留 schwab 持倉
+        inventory = inventory.filter(i => i.source !== 'custom');
+        inventory.push(...parsedData);
+        // [V4.96] 將 price 欄寫入 prices[] 和 initialPricesSnapshot[]，對齊嘉信版行為
+        // 原因：通用版匯入後應與嘉信版一致，有股價即顯示 KPI，同時提供 API 當機備用快取
+        const initP = {};
+        parsedData.forEach(it => { if (it.Price > 0) initP[it.Symbol] = it.Price; });
+        Object.entries(initP).forEach(([s,p]) => { prices[s]=p; initialPricesSnapshot[s]=p; });
+        if (Object.keys(initP).length > 0) updateUnrealizedKPI();
+        saveCurrentUser(); selfCheck(); render();
+    } else if (type === 'gainloss') {
+        // 清除舊的 custom rawTrades，保留 schwab
+        rawTrades = rawTrades.filter(t => t.source !== 'custom');
+        rawTrades.push(...parsedData);
+        // 重算 stats
+        const customStats = {};
+        parsedData.forEach(t => {
+            if (!customStats[t.sym]) customStats[t.sym] = { gain:0, days:0, trades:0 };
+            customStats[t.sym].gain   += t.gain;
+            customStats[t.sym].days   += t.days;
+            customStats[t.sym].trades += 1;
+        });
+        // 合併到 stats（只加 custom 的，不動 schwab 的）
+        Object.entries(customStats).forEach(([sym, v]) => {
+            if (!stats[sym]) stats[sym] = { gain:0, days:0, trades:0 };
+            // 先扣掉舊的 custom 累計（避免重複），再加新的
+            stats[sym].gain   = (stats[sym].gain   || 0) + v.gain;
+            stats[sym].days   = (stats[sym].days   || 0) + v.days;
+            stats[sym].trades = (stats[sym].trades || 0) + v.trades;
+        });
+        const grandGain = Object.values(stats).reduce((s,v)=>s+v.gain,0);
+        const grandDays = Object.values(stats).reduce((s,v)=>s+v.days,0);
+        refreshKPI(grandGain, grandDays);
+        saveCurrentUser(); selfCheck(); render(); renderTrend();
+    } else if (type === 'txn') {
+        txnData = txnData.filter(t => t.source !== 'custom');
+        // [V4.72] 動作正規化：過濾空值 key 避免 '' → 'Journaled Shares' 的錯誤對應
+        // 原因：actionMapping 的選填項目可能是空字串，不能作為 key 進 actionMap
+        const am = _csvImport.actionMapping || {};
+        const actionMap = {};
+        if (am.buy)        actionMap[am.buy]        = 'Buy';
+        if (am.sell)       actionMap[am.sell]        = 'Sell';
+        if (am.reinvest)   actionMap[am.reinvest]    = 'Reinvest Shares';
+        if (am.split)      actionMap[am.split]       = 'Journaled Shares';
+        if (am.stocksplit) actionMap[am.stocksplit]  = 'Journaled Shares';  // [V4.73] Stock Split 也正規化成 Journaled Shares（同邏輯：加股數不動成本）
+        if (am.wire)       actionMap[am.wire]        = 'Wire Received';
+        const normalizedTxn = parsedData.map(t => ({
+            ...t,
+            action: actionMap[t.action] || t.action
+        }));
+        txnData.push(...normalizedTxn);
+        saveCurrentUser();
+    }
+
+    checkImportLock();
+    updateCustomBtnStatus();
+
+    // 顯示摘要
+    const summaryEl = document.getElementById('importSummaryText');
+    const typeNames = { positions:'持倉', gainloss:'已實現損益', txn:'交易紀錄' };
+    if (summaryEl) {
+        summaryEl.innerHTML = [
+            `✅ 匯入成功：${typeNames[type]}`,
+            `📊 匯入筆數：${parsedData.length} 筆`,
+            _csvImport.skipped.length ? `⚠️ 跳過 ${_csvImport.skipped.length} 筆` : '',
+            type === 'gainloss' ? `💰 損益加總：${fmtUSD(parsedData.reduce((s,t)=>s+t.gain,0))}` : '',
+        ].filter(Boolean).join('<br>');
+    }
+
+    // [V4.70] 持倉匯入完成後顯示現金餘額輸入框
+    const cashRow = document.getElementById('cashInputRow');
+    if (cashRow) {
+        cashRow.style.display = type === 'positions' ? '' : 'none';
+        if (type === 'positions') {
+            const cashInput = document.getElementById('customCashInput');
+            if (cashInput) cashInput.value = currentCash > 0 ? currentCash : '';
+        }
+    }
+
+    // [V4.72] 交易紀錄匯入完成後顯示重建快照按鈕
+    // 原因：txn 匯入後需要觸發 buildSnapshotsFromTxn，之前沒有引導入口
+    const rebuildRow = document.getElementById('rebuildSnapshotRow');
+    if (rebuildRow) rebuildRow.style.display = type === 'txn' ? '' : 'none';
+
+    // diagBar 更新
+    const customDiag = document.getElementById('customDiagBar');
+    if (customDiag) {
+        customDiag.innerHTML = `<span class="diag-tag diag-ok">✓ ${typeNames[type]} ${parsedData.length} 筆已匯入</span>`;
+    }
+
+    // 預設格式名稱：只有上次選過格式才帶入，否則留空讓使用者自己命名
+    const nameInput = document.getElementById('formatNameInput');
+    if (nameInput) nameInput.value = _csvImport.matchedFormat || '';
+    // 更新儲存欄 label，顯示目前是哪個 type，並重置確認訊息
+    const saveRow = document.getElementById('formatSaveRow');
+    if (saveRow) {
+        saveRow.style.display = '';
+        const label = document.getElementById('formatSaveLabel');
+        if (label) label.textContent = `💾 儲存「${typeNames[type]}」格式範本：`;
+        const confirmMsg = document.getElementById('formatSaveConfirm');
+        if (confirmMsg) confirmMsg.style.display = 'none';
+    }
+
+    csvSetStep(4);
+}
+
+// ── 儲存格式範本 ──
+function saveFormatTemplate() {
+    const name = (document.getElementById('formatNameInput')?.value || '').trim();
+    if (!name) { alert('請輸入格式名稱'); return; }
+
+    const { type, mapping, actionMapping } = _csvImport;
+    if (!csvFormats[name]) csvFormats[name] = {};
+    csvFormats[name][type] = { ...mapping };
+    // [V4.70] txn 類型一起存動作對應
+    if (type === 'txn' && actionMapping && Object.keys(actionMapping).length) {
+        csvFormats[name][type].actionMapping = { ...actionMapping };
+    }
+    localStorage.setItem('hunter_csv_formats', JSON.stringify(csvFormats));
+
+    // 顯示確認訊息，但保留輸入框和按鈕結構
+    const confirmMsg = document.getElementById('formatSaveConfirm');
+    if (confirmMsg) {
+        confirmMsg.textContent = `✓ 已儲存「${name}」`;
+        confirmMsg.style.display = '';
+        setTimeout(() => { confirmMsg.style.display = 'none'; }, 2500);
+    }
+}
+
+// [V4.70] 套用通用版現金餘額
+function applyCustomCash() {
+    const val = parseFloat(document.getElementById('customCashInput')?.value) || 0;
+    currentCash = val;
+    saveCurrentUser();
+    updateUnrealizedKPI();
+    const confirm = document.getElementById('cashApplyConfirm');
+    if (confirm) {
+        confirm.style.display = '';
+        setTimeout(() => { confirm.style.display = 'none'; }, 2000);
+    }
+}
+
+// ── 工具函數 ──
+// [V4.70fix] Action 正規化：把各券商的買賣名稱統一對應到 Schwab 格式
+// 原因：buildDailyHoldings 只認識 Schwab 的 action 字串
+function normalizeAction(raw) {
+    if (!raw) return raw;
+    const s = raw.toString().trim().toLowerCase();
+    // 買入
+    if (/^(buy|bought|purchase|bought to open|bo|market buy|limit buy)/.test(s)) return 'Buy';
+    // 賣出
+    if (/^(sell|sold|sold to close|sc|market sell|limit sell)/.test(s))           return 'Sell';
+    // 股息再投入
+    if (/^(reinvest shares|reinvest dividend|qual div reinvest|dividend reinvest|drip)/.test(s)) return 'Reinvest Shares';
+    // 股票分割/合併/過戶
+    if (/^(journaled shares|stock split|stock merger|internal transfer)/.test(s))  return 'Journaled Shares';
+    // 外部入金
+    if (/^(wire received|ach|deposit|transfer in|external|funding)/.test(s))       return 'Wire Received';
+    // 股息
+    if (/^(cash dividend|qualified dividend|qual div|ordinary div|bond interest|credit interest|reinvest dividend)/.test(s)) return 'Cash Dividend';
+    // 費用/出金（金額為負，不影響持倉，直接原樣保留讓 buildDailyCash 處理）
+    // 原樣回傳，buildDailyHoldings 會跳過不認識的 action
+    return raw.toString().trim();
+}
+
+function headerObj(headers, row) {
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (row[i] || '').toString().trim(); });
+    return obj;
+}
+
+function clean(v) {
+    return (v || '').toString().trim().toUpperCase().replace(/['"]/g, '');
+}
+
+function calcDays(od, cd) {
+    const a = new Date(normalizeDate(od)), b = new Date(normalizeDate(cd));
+    return (!isNaN(a) && !isNaN(b)) ? Math.max(1, Math.round((b - a) / 86400000)) : 1;
+}
+
+// 統一日期格式為 ISO（嘗試常見格式）
+function normalizeDate(s) {
+    if (!s) return '';
+    s = s.trim();
+    // YYYY-MM-DD 直接回傳
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    // MM/DD/YYYY
+    const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m1) return `${m1[3]}-${m1[1].padStart(2,'0')}-${m1[2].padStart(2,'0')}`;
+    // DD/MM/YYYY
+    const m2 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (m2) return `${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`;
+    // YYYY/MM/DD
+    const m3 = s.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+    if (m3) return `${m3[1]}-${m3[2]}-${m3[3]}`;
+    return s;
+}
+
+// ══════════════════════════════════════════════════════
 //  BACKUP / RESTORE
 // ══════════════════════════════════════════════════════
-function clearAllData() {
-    if (!confirm('確定清除所有資料？\n\n這會刪除所有帳戶的持股、對帳單、快照等全部資料。\n請確認已備份後再執行。')) return;
-    Object.keys(localStorage)
-        .filter(k => k.startsWith('hunter_'))
-        .forEach(k => localStorage.removeItem(k));
-    // 重置所有狀態
+
+// [V4.81] 重構 clearAllData — 拆成兩張作業卡，集中清除邏輯避免日後漏改
+// 原因：清除邏輯散落各處，每次新增功能容易遺漏
+// 影響範圍：clearAllData 行為完全不變，僅整理程式碼結構
+
+// 作業卡A：所有資料變數歸零
+// 新增欄位時：在這裡補對應變數的重置
+function clearDataVariables() {
     users = ['我的帳戶'];
     activeUser = '我的帳戶';
     inventory = []; stats = {}; prices = {}; rawTrades = [];
@@ -4202,22 +5937,27 @@ function clearAllData() {
     initialPricesSnapshot = {};
     annualGoal = 0;
     monthlyGoal = 0;
+    ytdBaseOverride = {};      // [V4.66] 基準值校正
     watchlist = []; wlData = {};
     colOrder = [...DEFAULT_COL_ORDER];
     kpiOrder = [...DEFAULT_KPI_ORDER];
-    localStorage.removeItem('hunter_col_order');
-    localStorage.removeItem('hunter_kpi_order');
-    saveUsers();
+    csvFormats = {};           // [V4.70] 通用匯入格式範本
+}
+
+// 作業卡B：所有畫面無條件清空
+// 新增 UI 元件時：在這裡補對應的清除動作
+function resetUIState() {
+    // 帳戶列表
     renderUserBtns();
-    // 清除年度目標 UI
+    // 年度目標
     clearAnnualGoal();
-    // 清除 Watchlist UI
+    // Watchlist
     renderWlTags(); renderWlTable();
     document.getElementById('wlStatusText').innerText = '';
-    // 重新渲染表頭和 KPI（順序已重置）
+    // 表頭與 KPI 結構
     renderTableHead();
     renderKpiGrid();
-    // 清除 KPI 顯示
+    // KPI 數字歸零
     ['kpiRealized','kpiAvgOutput','kpiTotalAvgOutput','kpiUnrealized','kpiMarketValue'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.textContent = '$0';
@@ -4225,19 +5965,67 @@ function clearAllData() {
     document.getElementById('kpiUnrealizedSub').textContent = '需更新股價';
     document.getElementById('kpiMarketSub').textContent = '—';
     document.getElementById('kpiRealizedSub').textContent = '—';
-    // 清除驗證欄位
+    // 驗證欄位
     ['v-schwabMV','v-schwabCash','v-schwabTotal'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
     const vr = document.getElementById('verifyResult');
     if (vr) vr.innerHTML = '';
+    // 基準值校正 UI
+    initYtdBaseUI();           // [V4.67]
+    // 通用匯入診斷欄
+    const customDiag = document.getElementById('customDiagBar');
+    if (customDiag) customDiag.innerHTML = '';
+    // 交易紀錄狀態與快照按鈕
+    const txnStatusEl = document.getElementById('txnStatus');
+    if (txnStatusEl) txnStatusEl.textContent = '';
+    const buildBtn = document.getElementById('buildSnapshotBtn');
+    if (buildBtn) buildBtn.style.display = 'none';
+    // 檔案選擇器殘留
+    resetFileInputs();         // [V4.78]
+    // 最後儲存時間
+    document.getElementById('lastSaved').textContent = '';
+    // [V4.81] 清除趨勢報表交易明細表（renderSymHistory empty return 時不會清）
+    const tradeTable = document.getElementById('tradeTable');
+    if (tradeTable) tradeTable.innerHTML = '';
+    // [V4.81] 清除即時查詢輸入框與結果
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    const searchResult = document.getElementById('searchResult');
+    if (searchResult) searchResult.innerHTML = '';
+    // [V4.81] 重置股價狀態列
+    const pulseDot = document.getElementById('pulseDot');
+    if (pulseDot) pulseDot.className = 'pulse off';
+    const priceSourceTag = document.getElementById('priceSourceTag');
+    if (priceSourceTag) priceSourceTag.textContent = '來源: —';
+    const priceTimeTag = document.getElementById('priceTimeTag');
+    if (priceTimeTag) priceTimeTag.textContent = '尚未更新｜請使用上方「⚡ 全股價」更新';
+}
+
+function clearAllData() {
+    if (!confirm('確定清除所有資料？\n\n這會刪除所有帳戶的持股、對帳單、快照等全部資料。\n請確認已備份後再執行。')) return;
+    // 清除 localStorage
+    Object.keys(localStorage)
+        .filter(k => k.startsWith('hunter_'))
+        .forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem('hunter_col_order');
+    localStorage.removeItem('hunter_kpi_order');
+    localStorage.removeItem('hunter_csv_formats');
+    // 作業卡A：資料變數歸零
+    clearDataVariables();
+    saveUsers();
+    // 作業卡B：畫面清空
+    resetUIState();
+    // 互斥鎖定與自訂格式狀態
+    updateCustomBtnStatus();
+    checkImportLock();
+    // 重新渲染
     selfCheck();
     render();
     renderTrend();
-    document.getElementById('lastSaved').textContent = '';
+    // 最終狀態提示（在 resetUIState 之後寫，避免被蓋掉）
     document.getElementById('diagBar').innerHTML = '<span class="diag-tag diag-info">已清除全部資料</span>';
-    alert('已清除完成，請重新匯入資料或還原備份。');
 }
 
 function openBackupModal() {
@@ -4272,12 +6060,14 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.63',
+        version: 'V4.96',
         exportTime: new Date().toISOString(),
         users: selected,
         watchlist: watchlist,
         colOrder: colOrder,
         kpiOrder: kpiOrder,
+        // [V4.70] 備份時同步帶走 CSV 格式範本庫
+        csvFormats: csvFormats,
         data: {}
     };
     selected.forEach(u => {
@@ -4288,7 +6078,7 @@ function doBackupExport() {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'}));
     a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    alert(`已匯出 ${selected.length} 個帳戶的備份`);
+    // [V4.67] 拿掉備份匯出 alert，靜默完成
 }
 
 function doBackupRestore(input) {
@@ -4347,8 +6137,17 @@ function doBackupRestore(input) {
             renderKpiGrid();     // 先建立 KPI DOM 結構
             renderTableHead();   // 先建立表頭結構
             loadCurrentUser();   // 再載入資料填入數值
-            alert(`還原成功：${toRestore.join('、')}`);
+            initYtdBaseUI();     // [V4.66] 同步基準值校正 UI
+            // [V4.70] 還原 CSV 格式範本庫
+            if (backup.csvFormats && typeof backup.csvFormats === 'object') {
+                csvFormats = backup.csvFormats;
+                localStorage.setItem('hunter_csv_formats', JSON.stringify(csvFormats));
+            }
+            checkImportLock();
+            // [V4.67] 拿掉 alert，改為 diagBar 提示
             closeBackupModal();
+            const diagBar = document.getElementById('diagBar');
+            if (diagBar) diagBar.innerHTML = `<span class="diag-tag diag-ok">✓ 還原成功：${toRestore.join('、')}</span>`;
         } catch(err) {
             alert('還原失敗：' + err.message);
         }
@@ -4358,13 +6157,37 @@ function doBackupRestore(input) {
 }
 
 // ── INIT ──
+
+// [V4.96] 開啟時自動清除所有帳戶資料，保護隱私
+// 原因：localStorage 資料會跨次保留，任何人打開檔案都能看到機密資料
+// 使用方式：每次使用前還原備份 JSON，關閉前備份即可
+// 影響範圍：每次頁面載入都從空白開始，localStorage 的帳戶資料全部清除
+(function clearOnLoad() {
+    // [V4.96fix] 改用掃全部 key 的方式，不依賴 hunter_users
+    // 原因：hunter_users 可能已被上次清除，導致帳戶 data key 清不到
+    Object.keys(localStorage)
+        .filter(k => k.startsWith('hunter_'))
+        .forEach(k => localStorage.removeItem(k));
+})();
+
 loadUsers();
 renderUserBtns();
 renderKpiGrid();
 loadCurrentUser();
 renderTableHead();
 renderWlTags();
+initYtdBaseUI(); // [V4.66] 初始化基準值校正 UI
+checkImportLock(); // [V4.70] 初始化匯入互斥狀態
 if(watchlist.length) document.getElementById('wlStatusText').innerText=`共 ${watchlist.length} 個標的`;
+
+// [V4.96] 關閉前提醒清除資料
+// 原因：萬一忘記備份就關閉，給使用者最後一次確認機會
+// 影響範圍：關閉/重新整理頁面時觸發
+window.addEventListener('beforeunload', function(e) {
+    e.preventDefault();
+    e.returnValue = '關閉前請確認已備份資料。關閉後本機資料將於下次開啟時自動清除。';
+    return e.returnValue;
+});
 </script>
 </body>
 </html>
