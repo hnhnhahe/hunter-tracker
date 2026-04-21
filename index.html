@@ -58,7 +58,7 @@
   1. 列出「本版本修改清單」：新增了什麼、改了什麼、還原了什麼
   2. 若本對話中有任何「改錯後補救」的情況，必須在交付訊息中明確列出「已還原：XXX」
   3. 不得等使用者發現才說，必須主動交代
-  失誤記錄：V4.92 改錯 parseSimpleInventory，V4.96 輸出時未主動提及已還原
+  失誤記錄：V4.92 改錯 parseSimpleInventory，V4.104 輸出時未主動提及已還原
 
 【隱藏數字規範】⚠️ 每次新增任何顯示金額或百分比的 UI 元件，必須確認：
   1. 靜態元件：ID 加入 toggleHideNumbers() 的遮蔽清單
@@ -72,10 +72,12 @@
   2. doBackupExport() / doBackupRestore() — 備份檔要包含新欄位的匯出和還原
   3. 版本號同步更新（依照版本管理規範）
 
-【新增 KPI／周轉表欄位規範】⚠️ 每次新增 KPI 或周轉表欄位，必須同步確認以下兩個地方：
+【新增 KPI／周轉表欄位規範】⚠️ 每次新增 KPI 或周轉表欄位，必須同步確認以下三個地方：
   1. CSV 匯出報表 — 新增對應欄位和標題
   2. 標題文字 — CSV 報表標題跟介面標題保持一致
   3. 若欄位需要排序，計算函數必須定義在全域（不可放在 render() 內部），才能讓 getVal() 呼叫
+  4. 使用說明「📊 指標說明」頁籤 — 新增欄位的公式、含意、判讀方式說明
+  失誤記錄：V4.104 新增決策三欄位，漏掉更新使用說明，V4.104 補上並加入此規範
 
 【改版備註規範】⚠️ 每次修改程式碼，必須在修改處加上備註，格式如下：
   // [Vx.xx] 改版說明 — 修改內容簡述
@@ -125,13 +127,13 @@
     3. 確認嘉信版 handleTxnFile 的 validActions 是否還有遺漏的 action 類型
 
 【下次對話待修清單】
-  - 新帳戶切換 KPI 污染 bug（V4.96 根本修復，Console trace 確認）
+  - 新帳戶切換 KPI 污染 bug（V4.104 根本修復，Console trace 確認）
     現象：A帳有資料 → 新增B帳 → 切換A帳再切回B帳 → B帳顯示A帳KPI數字
     根本原因：loadCurrentUser() 的 if(raw) 分支只載入資料、不清畫面
       - 新增B帳時 switchUser 存了空的 hunter_B_data
       - 切回B帳時走 if(raw) 分支，不呼叫 resetUIState()
       - KPI DOM 殘留 A 帳數字，render() 只清表格不清 KPI
-    修法（V4.96）：resetUIState() 移到 if/else 之前，每次 loadCurrentUser 都先清畫面
+    修法（V4.104）：resetUIState() 移到 if/else 之前，每次 loadCurrentUser 都先清畫面
     附加修法（V4.90）：refreshPrices / buildSnapshotsFromTxn async race condition 保護
 
 【嘉信匯入三入口規範】⚠️ 以下三個函數是嘉信版的獨立入口，每次修改「匯入完成後必做動作」時，
@@ -157,7 +159,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.96</title>
+<title>獵人追蹤戰情室 V4.104</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -664,7 +666,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.96</span>
+        <span class="header-ver">V4.104</span>
     </div>
     <div class="header-right">
         <!-- 手機和電腦都顯示 -->
@@ -961,39 +963,54 @@ input[type=file]::file-selector-button {
 
     <!-- 使用流程 -->
     <div id="helpTab-guide">
-        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">📅 每日更新流程</div>
-        <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
-            <div>1. 點 user-bar 的 <strong>⚡ 全股價</strong> — 更新所有帳戶即時股價並記錄今日快照</div>
-            <div>2. 查看戰情室 KPI 和表格，確認各標的狀況</div>
-            <div>3. 如有停損警告（紅色列）請留意</div>
+
+        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">🚀 第一次設定流程（只需做一次）</div>
+        <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:4px">
+            <div style="font-weight:600;color:var(--text);margin-bottom:4px">▍ Schwab 用戶</div>
+            <div>1. 從 Schwab 匯出三個檔案：</div>
+            <div style="margin-left:16px">• <strong>① 持倉</strong>：Accounts → Positions → Export → <code>Individual-Positions-xxxx.csv</code>（含目前所有持股、均成本、股價）</div>
+            <div style="margin-left:16px">• <strong>② 已實現損益</strong>：History → Gain/Loss → Export → <code>GainLoss_Realized_Details_xxxx.csv</code>（含所有歷史買賣損益，範圍越長越好）</div>
+            <div style="margin-left:16px">• <strong>③ 交易紀錄</strong>：History → Transactions → Export → <code>Individual_XXX_Transactions_xxxx.csv</code>（選全部時間範圍，用於重建歷史快照）</div>
+            <div>2. 展開「🧬 數據源管理」，依序匯入 ①②③</div>
+            <div>3. 展開「⚙️ 進階設定」→ 點「📈 重建歷史快照」→ 等待完成（這會從交易紀錄推算每天的資產狀況，建立 YTD 基準，<strong>只需做一次</strong>）</div>
+            <div>4. 點 <strong>⚡ 全帳戶股價</strong> 更新今日即時股價，讓 YTD% 正確顯示</div>
+            <div>5. 確認 YTD% 基準日是否為今年 1/2（或你的第一筆交易日）</div>
+            <div>6. 若 YTD% 與嘉信對不上 → 展開「📐 YTD 基準值校正」，輸入嘉信年初實際總資產（校正只影響 YTD% 計算，不動歷史快照）</div>
+            <div>7. 點「💾 備份」儲存完整資料（含歷史快照），<strong>之後每次使用還原這份備份即可，不需再重建</strong></div>
+        </div>
+        <div style="font-size:.78rem;color:#d97706;margin-bottom:16px;padding:8px;background:#fffbeb;border-radius:6px;border-left:3px solid #d97706">
+            ⚠️ 備份包含歷史快照。若跳過備份直接關閉，下次需要重新重建快照才能取得正確 YTD 基準。
         </div>
 
-        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">💼 Schwab 有交易時的更新流程</div>
+        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">📅 每日使用流程</div>
         <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
-            <div>1. Schwab → Accounts → Positions → Export → 下載 <code>Individual-Positions-xxxx.csv</code></div>
-            <div>2. 展開「🧬 數據源管理」→ ① 初始持股，匯入 Positions CSV</div>
-            <div>3. Schwab → History → Gain/Loss → Export → 下載 <code>GainLoss_Realized_Details_xxxx.csv</code></div>
-            <div>4. ② 已實現損益，匯入 GainLoss CSV</div>
-            <div>5. Schwab → History → Transactions → Export（選全部時間範圍）→ 下載 <code>Individual_XXX_Transactions_xxxx.csv</code></div>
-            <div>6. ③ 交易紀錄，匯入 Transactions CSV（備用，重建時才需要）</div>
-            <div>7. 匯入 ① 後 KPI 即自動顯示（使用 CSV 內的股價）</div>
-            <div>8. 點 <strong>⚡ 全股價</strong> 可更新成今日即時股價（Finnhub，約15分鐘延遲）</div>
+            <div>1. 點「💾 備份/還原」→ 還原上次的備份 JSON（<strong>必須先還原，才有歷史快照和正確 YTD 基準</strong>）</div>
+            <div>2. 點 <strong>⚡ 全帳戶股價</strong> 更新今日即時股價，記錄今日快照</div>
+            <div>3. 查看戰情室 KPI 和表格，確認各標的狀況</div>
+            <div>4. 如有停損警告（紅色列）請留意</div>
+            <div>5. 操作完畢後點「💾 備份」儲存，<strong>關閉前務必備份</strong>（頁面關閉會清除本機資料）</div>
+        </div>
+
+        <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">💼 Schwab 有交易時的額外步驟</div>
+        <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
+            <div>在每日流程的還原備份之後，額外補做：</div>
+            <div>1. 重新匯出並匯入 <strong>① 持倉 CSV</strong>（更新持股數量和均成本）</div>
+            <div>2. 重新匯出並匯入 <strong>② 已實現損益 CSV</strong>（更新損益紀錄）</div>
+            <div>3. 若要更新趨勢圖歷史，重新匯入 <strong>③ 交易紀錄</strong> 後重建快照（非必要，視需求而定）</div>
+            <div>4. 點 <strong>⚡ 全帳戶股價</strong> 更新即時股價</div>
+            <div>5. 備份</div>
         </div>
 
         <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">🔧 其他券商（Firstrade / TD / 凱基等）匯入流程</div>
         <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px">
-            <div>1. 從你的券商後台匯出持倉 CSV、已實現損益 CSV（交易紀錄選填）</div>
+            <div>1. 從券商後台匯出：<strong>持倉 CSV</strong>（含股票代號、股數、均成本）、<strong>已實現損益 CSV</strong>（含買賣日期和損益）、交易紀錄 CSV（選填，用於重建歷史快照）</div>
             <div>2. 展開「🧬 數據源管理」→ 下方「🔧 通用 CSV 匯入」區塊</div>
-            <div>3. 點 <strong>④ 自訂持倉</strong>，上傳持倉 CSV</div>
-            <div>4. 系統自動偵測標頭行（跳過券商帳戶描述列），顯示欄位對應畫面</div>
-            <div>5. 如有已存格式（上次用過）→ 點選格式按鈕一鍵帶入，確認後下一步</div>
-            <div>6. 首次使用 → 手動對應每個欄位（參考右側 Schwab 欄位名稱作為對照）</div>
-            <div>7. 預覽前三筆確認正確 → 確認匯入</div>
-            <div>8. 完成後可命名儲存格式範本，下次同格式不需重新對應</div>
-            <div>9. 同樣流程操作 <strong>⑤ 自訂已實現損益</strong>，⑥ 交易紀錄選填</div>
-            <div>10. 若持倉 CSV 有現價欄且已對應，匯入後 KPI 即顯示；無現價欄則需點 <strong>⚡ 全股價</strong></div>
-            <div style="color:#d97706;margin-top:6px">📌 格式範本存在 localStorage，備份 JSON 時會一起帶走，換裝置還原後依然可用</div>
-            <div style="color:#d97706">📌 Schwab ①②③ 與通用 ④⑤⑥ 互斥，同一帳戶只能用一種入口</div>
+            <div>3. 點 <strong>④ 自訂持倉</strong>，上傳持倉 CSV，手動對應欄位（股票代號、股數、均成本、現價選填）</div>
+            <div>4. 首次使用完成後可命名儲存格式範本，下次同格式一鍵套用</div>
+            <div>5. 同樣流程操作 <strong>⑤ 自訂已實現損益</strong></div>
+            <div>6. 若有現價欄已對應，匯入後 KPI 即顯示；無現價欄則需點 <strong>⚡ 全股價</strong></div>
+            <div>7. 後續步驟同 Schwab 版：重建快照 → 全股價 → 校正（如需）→ 備份</div>
+            <div style="color:#d97706;margin-top:6px">📌 Schwab ①②③ 與通用 ④⑤⑥ 互斥，同一帳戶只能用一種入口</div>
         </div>
 
         <div style="font-weight:700;margin-bottom:8px;color:var(--blue)">⚖️ Schwab 版 vs 通用版差異</div>
@@ -1168,6 +1185,40 @@ input[type=file]::file-selector-button {
                 </div>
             </div>
 
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">🎯 解套目標價</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>公式：</strong>= 均成本（不賠錢的最低底線）</div>
+                    <div><strong>含意：</strong>股價回到這個價位才算解套，出場不虧損</div>
+                    <div><strong>子標題：</strong>顯示即時股價距離解套目標的空間百分比</div>
+                    <div style="color:#d97706;margin-top:4px">📌 這是底線，不是目標。回到均成本只是保本，不代表應該出場</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">📈 獲利目標價</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div><strong>盈利中（未實現損益 > 0）：</strong>52W 高點 × 98%</div>
+                    <div><strong>虧損中（未實現損益 ≤ 0）：</strong>均成本 × 1.05（回本後再賺 5%）</div>
+                    <div><strong>邏輯：</strong>盈利時以市場歷史高點為參考，不貪在最高點；虧損時首要任務是解套帶小利出場，釋放資金</div>
+                    <div><strong>子標題：</strong>顯示目標價的計算依據與距離%</div>
+                    <div style="color:#d97706;margin-top:4px">📌 52W 高點反映市場在過去一年認可的真實成交價，比分析師預測更可靠</div>
+                    <div style="color:#ef4444;margin-top:2px">⚠ 若 52W 高點持續下修，代表股票基本面可能惡化，應配合「操作建議」欄判斷</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">⚙️ 操作建議</div>
+                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+                    <div style="margin-bottom:6px">依優先順序判斷，觸發第一個條件即顯示：</div>
+                    <div style="padding:4px 8px;background:#f0fdf4;border-radius:4px;margin-bottom:4px"><span style="color:var(--green);font-weight:600">🎯 達到目標：建議減碼</span> — 即時股價 ≥ 獲利目標價</div>
+                    <div style="padding:4px 8px;background:#fffbeb;border-radius:4px;margin-bottom:4px"><span style="color:#d97706;font-weight:600">⚠️ 52W下修警訊：評估出場</span> — 即時股價 &lt; 52W高點 × 75%（市場信心轉弱）</div>
+                    <div style="padding:4px 8px;background:#fef2f2;border-radius:4px;margin-bottom:4px"><span style="color:var(--red);font-weight:600">🔒 低於成本：不賠錢續抱</span> — 即時股價 &lt; 均成本（虧損中，等回本）</div>
+                    <div style="padding:4px 8px;background:#eff6ff;border-radius:4px"><span style="color:var(--blue);font-weight:600">⚙️ 產線運行中：續等</span> — 其餘狀況（正常持倉中）</div>
+                    <div style="color:#d97706;margin-top:6px">📌 52W 下修警訊閾值設為 75%（跌破高點四分之三位置），代表市場信心已明顯轉弱</div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -1204,9 +1255,58 @@ input[type=file]::file-selector-button {
 
             <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--green)">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span style="font-family:var(--mono);font-weight:700;color:var(--green)">V4.96 ⭐ 最新</span>
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--green)">V4.104 ⭐ 最新</span>
                 </div>
-                <div style="font-size:.78rem;color:var(--text)">隱私保護：① 開啟頁面時自動清除 localStorage 所有帳戶資料，每次從空白開始；② 關閉/重新整理前跳出提醒確認已備份。正常使用流程：開啟 → 還原備份 → 操作 → 備份 → 關閉。</div>
+                <div style="font-size:.78rem;color:var(--text)">補上 V4.103 新增決策欄位的使用說明（解套目標價、獲利目標價、操作建議）。DEV_RULES 新增【新增欄位必須同步更新使用說明】規範。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.100</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">YTD 基準日修正：重建快照後無股價時，calcYTD() 先顯示基準日和年初資產，YTD% 顯示「需更新股價」，待按⚡全股價後才計算百分比。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.99</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">股價狀態列修正：全帳戶更新完成後補回「Finnhub｜時間｜API X/X」，不再被 resetUIState() 清掉。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.98</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">股價更新真實回饋：refreshPrices() 回傳實際成功/失敗/快取筆數，完成後顯示「API X/X｜快取 X 筆｜失敗 X 筆」，不再靜默完成。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.97</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">Worker 健康檢查：每次按「⚡ 全股價」前先測試 Worker 是否正常，無回應則顯示警告並中止。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.96</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">隱私保護：開啟頁面時自動清除所有本機資料，每次從空白開始；關閉前跳出備份提醒。正常使用流程：開啟 → 還原備份 → 操作 → 備份 → 關閉。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.95</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">使用說明更新：補充匯入後股價顯示邏輯說明、新增 Schwab 版 vs 通用版差異對照表、補齊版本歷程。</div>
+            </div>
+
+            <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-family:var(--mono);font-weight:700;color:var(--blue)">V4.94</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text)">DEV_RULES 新增【版本交付盤點規範】：每次輸出新版本前必須主動列出修改清單，改錯補救情況必須主動說明已還原。</div>
             </div>
 
             <div style="background:white;padding:10px 12px;border-radius:6px;border-left:4px solid var(--blue)">
@@ -1906,7 +2006,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.96 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.104 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1947,7 +2047,12 @@ const COL_DEFS = [
     { key:'totalDailyOut', label:'總日均產值',   align:'right', sortable:true  },
     { key:'outputContrib', label:'產值貢獻%',    align:'right', sortable:true  },
     { key:'week52',    label:'52週位置',     align:'left',  sortable:true  },
-    { key:'target',    label:'目標售價',     align:'right', sortable:true  },
+    { key:'target',       label:'目標售價',     align:'right', sortable:true  },
+    // [V4.104] 新增決策三欄位：解套目標價、獲利目標價、操作建議
+    // 原因：整合生管決策邏輯，讓使用者一眼看出每支股票的操作方向
+    { key:'breakeven',    label:'解套目標價',   align:'right', sortable:true  },
+    { key:'profitTarget', label:'獲利目標價',   align:'right', sortable:true  },
+    { key:'decision',     label:'操作建議',     align:'left',  sortable:false },
 ];
 const DEFAULT_COL_ORDER = COL_DEFS.map(c=>c.key);
 // 清除舊的 colOrder 若包含不存在的欄位
@@ -2054,7 +2159,7 @@ function resetFileInputs() {
 function loadCurrentUser() {
     if (!activeUser) return;
 
-    // [V4.96] 無論 if/else 都先清空畫面，再填入新帳戶資料
+    // [V4.104] 無論 if/else 都先清空畫面，再填入新帳戶資料
     // 原因：if(raw) 分支只載入資料、不清畫面，導致切換到「有存過空資料的帳戶」時
     //       KPI 數字殘留前一個帳戶的值（Console 確認：hunter_qq_data.inventory=0 但畫面顯示舊帳戶 KPI）
     // 影響範圍：所有帳戶切換場景，確保每次切換都從乾淨畫面開始
@@ -2239,7 +2344,7 @@ function addDiagMsg(msg, type='diag-info') {
 //  TEMPLATES
 // ══════════════════════════════════════════════════════
 function downloadInventoryTemplate() {
-    // [V4.96] 範本加入選填 Price 欄，對齊嘉信版匯入後即顯示 KPI 的行為
+    // [V4.104] 範本加入選填 Price 欄，對齊嘉信版匯入後即顯示 KPI 的行為
     downloadCSV(`Symbol,Shares,Cost\nNVDA,240,123.16\nVRT,71,169.22\nASTS,70,93.06\nRKLB,178,56.46`, '持股匯入範例.csv');
 }
 function downloadDemo() {
@@ -2645,7 +2750,20 @@ function calcYTD() {
 
     // 目前總資產（需要有股價才能算）
     const totalMV = inventory.reduce((sum,it)=>{ const pp=prices[it.Symbol]; return pp!==undefined?sum+pp*parseFloat(it.Shares):sum; },0);
-    if (!totalMV) return;
+
+    // [V4.104] 無股價時先顯示基準日，YTD% 顯示「需更新股價」
+    // 原因：重建快照後基準日已知，不應因沒有股價就完全不顯示
+    if (!totalMV) {
+        const subEl = document.getElementById('kpiYTDSub');
+        if (subEl) {
+            let subText = override && override > 0
+                ? `基準 ${baseSnap.date} ${fmtUSD(baseTotalAssets)}（嘉信校正）`
+                : `基準 ${baseSnap.date} ${fmtUSD(baseTotalAssets)}`;
+            subEl.textContent = subText;
+        }
+        setKPI('kpiYTD', '需更新股價', 'green');
+        return;
+    }
     const currentTotal = totalMV + currentCash;
 
     // 今年外部資金淨流入（Wire Received + Journal，正=流入，負=流出）
@@ -2771,7 +2889,23 @@ function refreshKPI(grandGain, grandDays) {
 // ══════════════════════════════════════════════════════
 async function refreshPrices() {
     if (!inventory.length) { alert('請先匯入持股資料'); return; }
-    // [V4.96] 記錄呼叫當下的帳戶，async 完成後比對，避免切換帳戶造成 race condition
+
+    // [V4.104] Worker 健康檢查：更新前先測試 Worker 是否正常
+    // 原因：Worker 若無回應，後續股價更新會靜默失敗，使用者不知道原因
+    // 影響範圍：refreshPrices 開頭，失敗則顯示警告並中止
+    const diagBar = document.getElementById('diagBar');
+    try {
+        const healthResp = await fetch(`${WORKER}/quote?symbols=AAPL`, {signal: AbortSignal.timeout(5000)});
+        const healthData = await healthResp.json();
+        if (!healthData?.results?.length) throw new Error('no data');
+    } catch(e) {
+        const dotEl = document.getElementById('pulseDot');
+        if (dotEl) dotEl.classList.add('off');
+        if (diagBar) diagBar.innerHTML = '<span class="diag-tag diag-err">⚠ Worker 無回應，股價無法更新。請稍後再試或確認網路連線。</span>';
+        return { fetched: 0, total: inventory.length, fallback: 0 };
+    }
+
+    // [V4.104] 記錄呼叫當下的帳戶，async 完成後比對，避免切換帳戶造成 race condition
     // 原因：使用者在 await 期間切換帳戶，完成後 saveCurrentUser() 會把舊帳戶資料寫入新帳戶
     // 影響範圍：refreshPrices 結尾的 saveCurrentUser / render
     const calledForUser = activeUser;
@@ -2812,10 +2946,12 @@ async function refreshPrices() {
     tm.textContent=`${now} ｜ API ${fetched}/${syms.length}${fb?` ｜ ${fb}筆快取`:''}`;
     src.textContent='Finnhub';
     updateUnrealizedKPI();
-    // [V4.96] 僅在帳戶未切換時才存檔，防止 async race condition 污染新帳戶
+    // [V4.104] 僅在帳戶未切換時才存檔，防止 async race condition 污染新帳戶
     if (activeUser === calledForUser) {
         saveCurrentUser(); render();
     }
+    // [V4.104] 回傳結果讓呼叫者判斷成功/失敗
+    return { fetched, total: syms.length, fallback: fb };
 }
 
 function updateUnrealizedKPI() {
@@ -3060,7 +3196,7 @@ function buildDailyHoldings() {
 async function buildSnapshotsFromTxn() {
     if (!txnData.length) { alert('請先匯入交易紀錄'); return; }
 
-    // [V4.96] 記錄呼叫當下的帳戶，async 完成後比對，避免切換帳戶造成 race condition
+    // [V4.104] 記錄呼叫當下的帳戶，async 完成後比對，避免切換帳戶造成 race condition
     // 原因：buildSnapshotsFromTxn 執行期間若使用者切換帳戶，完成後 saveCurrentUser() 會污染新帳戶
     // 影響範圍：buildSnapshotsFromTxn 結尾的 saveCurrentUser
     const calledForUser = activeUser;
@@ -3171,7 +3307,7 @@ async function buildSnapshotsFromTxn() {
     // 建完成功，才替換 posSnapshots
     newSnapshots.sort((a,b)=>a.date.localeCompare(b.date));
     posSnapshots = newSnapshots;
-    // [V4.96] 僅在帳戶未切換時才存檔，防止 async race condition 污染新帳戶
+    // [V4.104] 僅在帳戶未切換時才存檔，防止 async race condition 污染新帳戶
     if (activeUser === calledForUser) {
         saveCurrentUser();
     }
@@ -3262,6 +3398,18 @@ function getVal(item,col) {
             return (p - w.low52) / (w.high52 - w.low52) * 100;
         }
         case 'target':  return parseFloat(notes[item.Symbol]?.target) || -9999;
+        // [V4.104] 解套目標價 = 均成本
+        case 'breakeven': return parseFloat(item.Cost) || 0;
+        // [V4.104] 獲利目標價排序
+        case 'profitTarget': {
+            const co_ = parseFloat(item.Cost);
+            const sh_ = parseFloat(item.Shares);
+            const cb_ = co_ * sh_;
+            const mv_ = p ? p * sh_ : 0;
+            const ur__ = mv_ - cb_;
+            const w52_ = weekData[item.Symbol];
+            return (ur__ > 0 && w52_) ? w52_.high52 * 0.98 : co_ * 1.05;
+        }
         case 'dailyOut':  return do_;
         case 'rollingOut': {
             const bd = new Date(); bd.setFullYear(bd.getFullYear()-1);
@@ -3497,6 +3645,61 @@ function render() {
             })(),
             week52:    week52Cell,
             target:    targetCell,
+            // [V4.104] 解套目標價 = 均成本（不賠錢的底線）
+            breakeven: (() => {
+                const dist = p !== undefined ? ((co - p) / p * 100) : null;
+                const cls = dist !== null ? (dist <= 0 ? 'pos' : 'neg') : '';
+                return `<td class="${numbersHidden ? 'num-hidden' : ''}">
+                    <div style="font-family:var(--mono)">$${co.toFixed(2)}</div>
+                    ${dist !== null ? `<div style="font-size:.7rem" class="${cls}">${dist <= 0 ? '+' : ''}${(-dist).toFixed(1)}% 空間</div>` : ''}
+                </td>`;
+            })(),
+            // [V4.104] 獲利目標價：
+            //   盈利中（ur_ > 0）→ 52W高點 × 98%
+            //   虧損中（ur_ <= 0 或無股價）→ 均成本 × 1.05
+            profitTarget: (() => {
+                let pt = null;
+                let ptLabel = '';
+                if (ur_ !== null && ur_ > 0 && w52) {
+                    pt = w52.high52 * 0.98;
+                    ptLabel = '52W高點98%';
+                } else {
+                    pt = co * 1.05;
+                    ptLabel = '回本+5%';
+                }
+                if (pt === null) return '<td><span class="muted">—</span></td>';
+                const dist = p !== undefined ? ((pt - p) / p * 100) : null;
+                const cls = dist !== null ? (dist >= 0 ? 'pos' : 'neg') : '';
+                return `<td class="${numbersHidden ? 'num-hidden' : ''}">
+                    <div style="font-family:var(--mono)">$${pt.toFixed(2)}</div>
+                    <div style="font-size:.65rem;color:var(--text3)">${ptLabel}</div>
+                    ${dist !== null ? `<div style="font-size:.7rem" class="${cls}">${dist >= 0 ? '+' : ''}${dist.toFixed(1)}%</div>` : ''}
+                </td>`;
+            })(),
+            // [V4.104] 操作建議：四種狀態
+            //   達標減碼：即時股價 >= 獲利目標價
+            //   52W下修警訊：即時股價 < 52W高點 × 75%
+            //   不賠錢續抱：即時股價 < 均成本
+            //   產線運行中：其餘
+            decision: (() => {
+                if (p === undefined) return '<td><span class="muted">—</span></td>';
+                let pt = (ur_ !== null && ur_ > 0 && w52) ? w52.high52 * 0.98 : co * 1.05;
+                let text = '', color = '', bg = '';
+                if (p >= pt) {
+                    text = '🎯 達到目標：建議減碼';
+                    color = 'var(--green)'; bg = 'var(--green-l)';
+                } else if (w52 && p < w52.high52 * 0.75) {
+                    text = '⚠️ 52W下修警訊：評估出場';
+                    color = '#d97706'; bg = '#fffbeb';
+                } else if (p < co) {
+                    text = '🔒 低於成本：不賠錢續抱';
+                    color = 'var(--red)'; bg = 'var(--red-l)';
+                } else {
+                    text = '⚙️ 產線運行中：續等';
+                    color = 'var(--blue)'; bg = 'var(--blue-l)';
+                }
+                return `<td><span style="font-size:.72rem;font-weight:600;color:${color};background:${bg};padding:2px 6px;border-radius:4px;white-space:nowrap">${text}</span></td>`;
+            })(),
         };
         const rowClass = isStopAlert ? 'stop-alert' : isStale ? 'stale-alert' : '';
         const mainRow = `<tr${rowClass?' class="'+rowClass+'"':''}>${colOrder.map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
@@ -4942,7 +5145,7 @@ function generateReportForUser(userName, today, isMerge=false) {
         `總資產,$${(totalMV+currentCash).toFixed(2)}`,
         ``,
         `## 持股明細`,
-        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,累計佔用天數,現役天數,歷史日均產值,現役日均產值,滾動日均產值(近365天),產值貢獻%,總日均產值,52W低點,52W高點,52W位置%,目標售價,進場理由,停損價`
+        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,累計佔用天數,現役天數,歷史日均產值,現役日均產值,滾動日均產值(近365天),產值貢獻%,總日均產值,52W低點,52W高點,52W位置%,目標售價,進場理由,停損價,解套目標價,獲利目標價,操作建議`
     ].join('\n');
 
     // 計算滾動基準日
@@ -5023,7 +5226,20 @@ function generateReportForUser(userName, today, isMerge=false) {
             s.days, ad, do_, ado,
             ro,contrib,tdo,
             w52?w52.low52.toFixed(2):'—',w52?w52.high52.toFixed(2):'—',pos52+'%',
-            note.target||'—',note.entryReason||'—',note.stopLoss||'—'].join(',');
+            note.target||'—',note.entryReason||'—',note.stopLoss||'—',
+            // [V4.104] 決策欄位
+            co.toFixed(2),
+            (() => { const ur__=(p&&mv)?mv-cb:null; const w52_=weekData[item.Symbol]; return (ur__!==null&&ur__>0&&w52_)?(w52_.high52*0.98).toFixed(2):(co*1.05).toFixed(2); })(),
+            (() => {
+                if (!p) return '—';
+                const ur__=mv-cb; const w52_=weekData[item.Symbol];
+                const pt=(ur__>0&&w52_)?w52_.high52*0.98:co*1.05;
+                if (p>=pt) return '達到目標：建議減碼';
+                if (w52_&&p<w52_.high52*0.75) return '52W下修警訊：評估出場';
+                if (p<co) return '低於成本：不賠錢續抱';
+                return '產線運行中：續等';
+            })()
+        ].join(',');
     }).join('\n');
 
     return summary + '\n' + rows;
@@ -5038,7 +5254,8 @@ async function allAccountsRefreshPrices() {
     btn.textContent = '更新中...';
 
     const originalUser = activeUser;
-    let successCount = 0;
+    // [V4.104] 累計所有帳戶的實際更新結果，避免「跑完就說完成」卻不知道幾支成功
+    let totalFetched = 0, totalSyms = 0, totalFallback = 0, updatedAccounts = 0;
 
     for (const user of users) {
         saveCurrentUser();
@@ -5047,8 +5264,13 @@ async function allAccountsRefreshPrices() {
         loadCurrentUser();
         if (!inventory.length) continue;
         btn.textContent = `更新 ${user}...`;
-        await refreshPrices();
-        successCount++;
+        const result = await refreshPrices();
+        if (result) {
+            totalFetched  += result.fetched;
+            totalSyms     += result.total;
+            totalFallback += result.fallback;
+            updatedAccounts++;
+        }
     }
 
     saveCurrentUser();
@@ -5061,7 +5283,32 @@ async function allAccountsRefreshPrices() {
 
     btn.disabled = false;
     btn.textContent = '⚡ 全帳戶股價';
-    document.getElementById('lastSaved').textContent = `全帳戶更新完成（${successCount} 個帳戶）`;
+
+    // [V4.104] 顯示真實結果：成功幾支、失敗幾支、用了幾筆快取
+    const diagBar = document.getElementById('diagBar');
+    if (totalSyms === 0) {
+        document.getElementById('lastSaved').textContent = `無持股資料，請先還原備份`;
+    } else if (totalFetched === 0 && totalFallback === 0) {
+        document.getElementById('lastSaved').textContent = `股價更新失敗（0/${totalSyms}）`;
+        if (diagBar) diagBar.innerHTML = '<span class="diag-tag diag-err">⚠ 股價全部更新失敗，請確認網路或稍後再試</span>';
+    } else {
+        const fb = totalFallback ? `｜快取 ${totalFallback} 筆` : '';
+        const failed = totalSyms - totalFetched - totalFallback;
+        const failedNote = failed > 0 ? `｜失敗 ${failed} 筆` : '';
+        const resultText = `API ${totalFetched}/${totalSyms}${fb}${failedNote}`;
+        document.getElementById('lastSaved').textContent = `股價更新完成｜${resultText}`;
+
+        // [V4.104] loadCurrentUser() → resetUIState() 會清掉股價狀態列
+        // 在切回原帳戶並 loadCurrentUser() 之後，把目前帳戶的股價狀態補回來
+        // 原因：全帳戶更新完成後使用者應看到目前帳戶的更新結果，而非「尚未更新」
+        const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        const src = document.getElementById('priceSourceTag');
+        const tm  = document.getElementById('priceTimeTag');
+        const dot = document.getElementById('pulseDot');
+        if (src) src.textContent = 'Finnhub';
+        if (tm)  tm.textContent  = `${now} ｜ ${resultText}`;
+        if (dot) dot.className   = 'pulse off';
+    }
 }
 
 // ══════════════════════════════════════════════════════
@@ -5221,7 +5468,7 @@ const CSV_FIELD_DEFS = {
         { key: 'symbol',  label: '股票代號',   required: true,  hint: 'Schwab: Symbol'         },
         { key: 'shares',  label: '股數',       required: true,  hint: 'Schwab: Qty (Quantity)'  },
         { key: 'cost',    label: '均成本/股',  required: true,  hint: 'Schwab: Cost/Share'      },
-        // [V4.96] 新增選填 price 欄，對齊嘉信版：匯入後即可顯示 KPI，API 當機時亦可作備用快取
+        // [V4.104] 新增選填 price 欄，對齊嘉信版：匯入後即可顯示 KPI，API 當機時亦可作備用快取
         { key: 'price',   label: '現價',       required: false, hint: '選填：有填則匯入後 KPI 即時顯示' },
     ],
     gainloss: [
@@ -5723,7 +5970,7 @@ function confirmCustomImport() {
         // 清除舊的 custom 持倉，保留 schwab 持倉
         inventory = inventory.filter(i => i.source !== 'custom');
         inventory.push(...parsedData);
-        // [V4.96] 將 price 欄寫入 prices[] 和 initialPricesSnapshot[]，對齊嘉信版行為
+        // [V4.104] 將 price 欄寫入 prices[] 和 initialPricesSnapshot[]，對齊嘉信版行為
         // 原因：通用版匯入後應與嘉信版一致，有股價即顯示 KPI，同時提供 API 當機備用快取
         const initP = {};
         parsedData.forEach(it => { if (it.Price > 0) initP[it.Symbol] = it.Price; });
@@ -6060,7 +6307,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.96',
+        version: 'V4.104',
         exportTime: new Date().toISOString(),
         users: selected,
         watchlist: watchlist,
@@ -6158,12 +6405,12 @@ function doBackupRestore(input) {
 
 // ── INIT ──
 
-// [V4.96] 開啟時自動清除所有帳戶資料，保護隱私
+// [V4.104] 開啟時自動清除所有帳戶資料，保護隱私
 // 原因：localStorage 資料會跨次保留，任何人打開檔案都能看到機密資料
 // 使用方式：每次使用前還原備份 JSON，關閉前備份即可
 // 影響範圍：每次頁面載入都從空白開始，localStorage 的帳戶資料全部清除
 (function clearOnLoad() {
-    // [V4.96fix] 改用掃全部 key 的方式，不依賴 hunter_users
+    // [V4.104fix] 改用掃全部 key 的方式，不依賴 hunter_users
     // 原因：hunter_users 可能已被上次清除，導致帳戶 data key 清不到
     Object.keys(localStorage)
         .filter(k => k.startsWith('hunter_'))
@@ -6180,7 +6427,7 @@ initYtdBaseUI(); // [V4.66] 初始化基準值校正 UI
 checkImportLock(); // [V4.70] 初始化匯入互斥狀態
 if(watchlist.length) document.getElementById('wlStatusText').innerText=`共 ${watchlist.length} 個標的`;
 
-// [V4.96] 關閉前提醒清除資料
+// [V4.104] 關閉前提醒清除資料
 // 原因：萬一忘記備份就關閉，給使用者最後一次確認機會
 // 影響範圍：關閉/重新整理頁面時觸發
 window.addEventListener('beforeunload', function(e) {
