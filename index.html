@@ -187,7 +187,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.112</title>
+<title>獵人追蹤戰情室 V4.113</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -694,7 +694,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.112</span>
+        <span class="header-ver">V4.113</span>
     </div>
     <div class="header-right">
         <!-- 手機和電腦都顯示 -->
@@ -1825,7 +1825,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.112 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.113 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -3705,31 +3705,31 @@ function render() {
         })();
         const noteRow = `<tr id="${noteRowId}" style="display:none;background:#fafafa">
             <td colspan="${colOrder.length}" style="padding:12px 16px">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
-                    <div>
-                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">🎯 獲利目標價（系統計算）</div>
-                        <div style="padding:6px 10px;background:var(--blue-l);border-radius:6px;font-size:.78rem;color:var(--blue);font-weight:600">${profitTargetInfo}</div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <!-- [V4.113] 三列垂直排版，手機版 flex-wrap 自動換行 -->
+                    <!-- 原邏輯：display:grid;grid-template-columns:1fr 1fr 1fr auto（一列橫排） -->
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <div style="font-size:.72rem;color:var(--text2);font-weight:600;width:130px;flex-shrink:0">🎯 獲利目標價（系統計算）</div>
+                        <div style="padding:5px 10px;background:var(--blue-l);border-radius:6px;font-size:.78rem;color:var(--blue);font-weight:600;flex:1;min-width:180px">${profitTargetInfo}</div>
                     </div>
-                    <div>
-                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">📈 進場理由</div>
-                        <div style="display:flex;gap:4px">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <div style="font-size:.72rem;color:var(--text2);font-weight:600;width:130px;flex-shrink:0">📈 進場理由</div>
+                        <div style="display:flex;gap:4px;flex:1;min-width:180px">
                             <input class="input input-sm" id="note-entry-${item.Symbol}" value="${(note.entryReason||'').replace(/"/g,'&quot;')}"
                                 placeholder="例如：AI算力核心受益" style="flex:1"
                                 onchange="saveNote('${item.Symbol}')">
                             <button class="btn btn-outline btn-sm" onclick="clearNoteField('${item.Symbol}','entryReason')" title="清除">✕</button>
                         </div>
                     </div>
-                    <div>
-                        <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600">🛑 停損價格（跌破此價格自動警告）</div>
-                        <div style="display:flex;gap:4px">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <div style="font-size:.72rem;color:var(--text2);font-weight:600;width:130px;flex-shrink:0">🛑 停損價格</div>
+                        <div style="display:flex;gap:4px;flex:1;min-width:180px">
                             <input class="input input-sm" id="note-stop-${item.Symbol}" value="${note.stopLoss||''}"
                                 placeholder="例如：150" type="number" style="flex:1"
                                 onchange="saveNote('${item.Symbol}')">
                             <button class="btn btn-outline btn-sm" onclick="clearNoteField('${item.Symbol}','stopLoss')" title="清除">✕</button>
                         </div>
-                    </div>
-                    <div>
-                        <button class="btn btn-danger btn-sm" onclick="clearAllNote('${item.Symbol}')">清除全部</button>
+                        <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="clearAllNote('${item.Symbol}')">清除全部</button>
                     </div>
                 </div>
             </td>
@@ -4995,6 +4995,10 @@ function setKPI(id,val,cls) {
 // ══════════════════════════════════════════════════════
 // [V4.106] 改為 JS 物件管理，buildChangelog() 自動產生 HTML，不再手動維護 HTML 區塊
 const CHANGELOG = {
+    // [V4.113] noteRow 備忘錄展開列改為三列垂直排版，手機版同步適配
+    // 原因：原本一列橫排四欄，空間擠、手機閱讀差
+    // 影響範圍：noteRow HTML 結構、mobile CSS
+    'V4.113': { text: '備忘錄展開列改為三列垂直排版（獲利目標價/進場理由/停損價格各佔一列），手機版同步適配。', type: 'fix' },
     // [V4.112] 報表全面對齊主畫面欄位 + DEV_RULES 新增報表同步規範
     // 原因：V4.111 修正操作建議邏輯，漏掉同步 generateReportForUser()，主畫面與報表不一致
     // 影響範圍：generateReportForUser() 標頭、資料列輸出、新增分類占比區塊；DEV_RULES
@@ -6584,7 +6588,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.112',
+        version: 'V4.113',
         exportTime: new Date().toISOString(),
         users: selected,
         watchlist: watchlist,
