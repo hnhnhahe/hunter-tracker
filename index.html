@@ -100,12 +100,41 @@
   4. 使用說明「📊 指標說明」頁籤 — 新增欄位的公式、含意、判讀方式說明
   失誤記錄：V4.104 新增決策三欄位，漏掉更新使用說明，V4.104 補上並加入此規範
 
+【狀態變數初始化規範】⚠️ 新增任何狀態變數（let xxx = ...）時，必須同步確認以下四處都有處理：
+  1. clearDataVariables() — 清除時重置為初始值
+  2. saveCurrentUser() — 備份時帶出（帳戶層級資料）
+  3. loadCurrentUser() — 還原時讀入（含舊備份 fallback 預設值）
+  4. doBackupExport() / doBackupRestore() — 若是全域設定（非帳戶層級，如 colOrder/hiddenCols），必須加入備份 JSON 並在還原時讀回，不可只存 localStorage（換設備會遺失）
+  失誤記錄：V4.121 新增 hiddenCols，只存 localStorage 未加入備份 JSON，V4.123 補正
+
+【報表函數副本規範】⚠️ 每次做「報表與主畫面比對」，不能只看邏輯結果是否相同，必須追到底層：
+  1. 報表用的計算函數跟主畫面是不是同一個？若是獨立副本，不管結果現在看起來一樣，都必須標記為風險提出討論
+  2. 有沒有 fallback 路徑的差異？主邏輯相似但 fallback 不同也會造成不一致（如 getReportActiveDays 缺少 txnData fallback）
+  3. 修完之後，把報表用到的所有計算函數列出來確認一遍，不能只確認這次動到的地方
+  具體執行：每次比對報表欄位，都要 grep 出報表函數裡用到的每一個計算函數名稱，逐一確認是否直接呼叫全域函數，還是自己有副本。有副本的一律視為潛在 bug，不能因為「語義等效」就放過。
+  失誤記錄：V4.128 前 getReportActiveDays/getReportActiveGain/getReportRollingGain 三個副本各自維護，fallback 不同導致從未賣出標的現役天數報表顯示 0
+
+【版本基礎規範】⚠️ 每次修改必須從使用者本次對話上傳的 HTML 檔案為基礎累加，不得從 /mnt/user-data/uploads/ 的其他檔案複製。修改前先讀版本號確認是最新版：
+  bash: grep "header-ver\">V" /home/claude/獵人追蹤戰情室_V4_XXX.html
+  確認版號再遞增，同一對話內每次輸出都必須從上一次輸出的 /home/claude/ 檔案累加。
+
 【報表同步規範】⚠️ 每次修改主畫面欄位（新增、改名、刪除、邏輯變更），必須同步更新 generateReportForUser() 的對應位置，缺一不可：
   1. 報表標頭欄位列 — 欄位名稱與順序須與主畫面完全一致
   2. 資料列對應輸出值 — 新增/刪除欄位時資料列同步新增/移除
   3. 計算型欄位邏輯（如操作建議）— 必須與主畫面 cellMap 保持完全一致，不得各自維護
   4. 新增欄位時同步更新使用說明「📊 指標說明」
   失誤記錄：V4.111 修正操作建議邏輯，漏掉同步 generateReportForUser()，導致主畫面與報表輸出不一致
+
+【Bug 處理規範】⚠️ 收到 bug 回報後，必須：
+  1. 先定位根本原因（不只修症狀，要說明為什麼會發生）
+  2. 主動掃描是否有同性質的其他 bug（舉一反三）
+  3. 提出永久解決方案，問使用者要不要一起做，確認後再動手
+  4. 修完後驗證，確認無誤才給使用者
+
+【Python 寫 JS 規範】⚠️ 用 Python 修改 JS 程式碼時：
+  1. 一律使用 str_replace 工具直接替換，不透過 Python heredoc 產生含換行的 JS 字串
+  2. 若必須用 Python 字串產生 JS，所有換行一律用 \n 跳脫，不得有真實換行
+  3. 寫完後掃描 text += 和 html += 的引號對稱性，確認無斷行
 
 【改版備註規範】⚠️ 每次修改程式碼，必須在修改處加上備註，格式如下：
   // [Vx.xx] 改版說明 — 修改內容簡述
@@ -187,7 +216,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.113</title>
+<title>獵人追蹤戰情室 V4.128</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -694,7 +723,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.113</span>
+        <span class="header-ver">V4.128</span>
     </div>
     <div class="header-right">
         <!-- 手機和電腦都顯示 -->
@@ -726,7 +755,7 @@ input[type=file]::file-selector-button {
     <span class="user-label">帳戶：</span>
     <div id="userBtns"></div>
     <button class="user-add" onclick="addUser()">＋ 新增</button>
-    <button class="user-add" onclick="openBackupModal()" style="margin-left:4px">💾 備份</button>
+    <button class="user-add" onclick="openBackupModal()" style="margin-left:4px">💾 備份/還原</button>
     <button class="user-add" onclick="allAccountsRefreshPrices()" style="margin-left:4px;color:#60a5fa;border-color:#60a5fa" id="allPriceBtn">⚡ 全股價</button>
     <button class="user-add" onclick="clearAllData()" style="margin-left:4px;color:#ef4444;border-color:#ef4444">🗑 清除</button>
     <span class="user-label" style="margin-left:auto" id="lastSaved"></span>
@@ -754,9 +783,8 @@ input[type=file]::file-selector-button {
     <!-- 原因：posTypeTargets 有儲存但沒有 UI 可顯示實際分佈與調整目標 -->
     <!-- 影響範圍：posTypeTargets 設定、實際持倉市值分佈顯示 -->
     <div class="card section-gap" id="posTypePanel">
-        <div class="card-header collapse-toggle" onclick="togglePanel('posTypePanel')">
-            <div class="card-title">🏷 持倉性質分佈</div>
-            <span class="collapse-icon">▼</span>
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <div class="card-title collapse-toggle" onclick="togglePanel('posTypePanel')" style="cursor:pointer;flex:1">🏷 持倉性質分佈 <span class="collapse-icon">▼</span></div>
         </div>
         <div class="card-body collapsible-body" id="posTypePanelBody">
             <div id="posTypeDistDisplay" style="margin-bottom:12px"></div>
@@ -781,7 +809,6 @@ input[type=file]::file-selector-button {
                     <span style="font-size:.72rem;color:var(--text3)">%</span>
                 </div>
                 <span id="ptTargetSum" style="font-size:.72rem;color:var(--text3)"></span>
-                <button class="btn btn-primary btn-sm" onclick="render()" style="margin-left:8px">🔄 更新操作建議</button>
             </div>
         </div>
     </div>
@@ -985,8 +1012,13 @@ input[type=file]::file-selector-button {
     <div class="card">
         <div class="card-header">
             <div class="card-title">📋 生管標的高效周轉表</div>
-            <div class="flex-row">
+            <div class="flex-row" style="gap:8px;align-items:center">
                 <span style="font-size:.72rem;color:var(--text3)">點擊排序 ｜ 拖拉標題換欄位順序</span>
+                <!-- [V4.120] 更新操作建議和產線分析按鈕移至周轉表右上角 -->
+                <!-- [V4.122] 新增欄位管理按鈕 -->
+                <button class="btn btn-outline btn-sm" onclick="openColMgrModal()" style="flex-shrink:0">⚙️ 欄位</button>
+                <button class="btn btn-outline btn-sm" onclick="render()" style="flex-shrink:0">🔄 更新建議</button>
+                <button class="btn btn-primary btn-sm" onclick="openAnalysisModal()" style="flex-shrink:0">📖 產線分析</button>
             </div>
         </div>
         <div class="tbl-wrap">
@@ -1131,183 +1163,335 @@ input[type=file]::file-selector-button {
     </div>
 
     <!-- 指標說明 -->
+    <!-- [V4.124] 依交接清單全面重建，重組為 A~F 六群分類 -->
     <div id="helpTab-metrics" style="display:none">
         <div style="font-size:.72rem;color:var(--text2);margin-bottom:12px">所有指標的計算公式與使用說明</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
 
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📊 歷史日均產值</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>該標的累積實現損益 ÷ 累計佔用天數</div>
-                    <div><strong>累計佔用天數：</strong>每筆交易的（賣出日 - 買入日），全部加總</div>
-                    <div><strong>含意：</strong>這個標的從開始操作至今，平均每天貢獻多少實現損益</div>
-                    <div style="color:#ef4444;margin-top:4px">⚠ 標的操作越久、天數越大，分母膨脹導致數值被稀釋，不同操作期的標的無法直接公平比較</div>
+        <!-- 工具總覽 -->
+        <div style="padding:10px 14px;background:linear-gradient(135deg,#1e3a5f,#2563eb);border-radius:8px;margin-bottom:14px">
+            <div style="font-weight:700;font-size:.82rem;color:#fff;margin-bottom:6px">📋 工具總覽</div>
+            <div style="font-size:.75rem;color:#bfdbfe;line-height:1.7">
+                <div>本工具以生管周轉率邏輯管理美股投資，核心概念是「<strong style="color:#fff">日均獲利產值</strong>」——把每支股票當成一條產線，用每天平均賺多少錢衡量效能。</div>
+                <div style="margin-top:4px">持倉分三路管理：<strong style="color:#fff">核心</strong>（長期持有）、<strong style="color:#fff">衛星</strong>（主題成長）、<strong style="color:#fff">週轉</strong>（資金效率），各路依不同邏輯給出操作建議。</div>
+            </div>
+        </div>
+
+        <!-- A. 持倉基本資訊 -->
+        <div style="font-weight:700;font-size:.82rem;color:#64748b;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:10px">🗂 A. 持倉基本資訊</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+            <div style="padding:10px 12px;background:#f8fafc;border-radius:6px;border-left:3px solid #64748b">
+                <div style="font-weight:700;font-size:.8rem;color:#64748b;margin-bottom:4px">現股 / 均成本 / 成本基礎</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>現股：</strong>目前持有股數</div>
+                    <div><strong>均成本：</strong>所有買入批次的加權平均成本價</div>
+                    <div><strong>成本基礎：</strong>均成本 × 持股股數，代表目前壓在這支標的的總資金</div>
+                    <div style="color:#d97706;margin-top:3px">📌 嘉信版由持股 CSV 匯入，通用版手動輸入；均成本影響未實現損益與目標價計算</div>
                 </div>
             </div>
 
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">🔵 現役天數</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>今天 - 本輪最早買入日</div>
-                    <div><strong>本輪定義：</strong>找出所有買入日期中，比最後一次賣出日期還要晚的最早買入日。若從未賣出，則從第一次買入起算。</div>
-                    <div><strong>含意：</strong>目前這一輪持倉已佔用資金幾天，反映現役資金的壓用時間</div>
-                    <div style="color:#d97706;margin-top:4px">📌 若從未賣出，現役天數 = 從第一次買入至今的總天數</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">🔵 現役日均產值</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>本輪已實現損益 ÷ 現役天數</div>
-                    <div><strong>本輪已實現損益：</strong>買入日期 ≥ 本輪起算日的所有交易損益加總</div>
-                    <div><strong>含意：</strong>這一輪持倉週期內，平均每天已產生多少實現損益</div>
-                    <div style="color:#d97706;margin-top:4px">📌 若本輪尚未賣出任何批次，本輪已實現損益為 0，現役日均產值為 0</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">🔄 滾動日均產值（近365天）</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>近365天內（賣出日在今天往前推一年）已實現損益加總 ÷ 365</div>
-                    <div><strong>分母固定：</strong>永遠是 365，不受操作年資影響</div>
-                    <div><strong>含意：</strong>近一年這個標的平均每天幫你賺多少錢</div>
-                    <div><strong>優點：</strong>所有標的分母相同，可直接橫向比較，反映當前真實產線效能</div>
-                    <div style="color:#d97706;margin-top:4px">📌 近一年無賣出紀錄 → 滾動日均產值為 0，代表近一年無實質產值貢獻</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">📈 產值貢獻%</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>該標的滾動日均產值 ÷ 全場所有持股滾動日均產值總和 × 100%</div>
-                    <div><strong>含意：</strong>這個標的佔整體產線產出的比重</div>
-                    <div><strong>判讀：</strong>與「持股占比%」對比，找出資金效率差異</div>
-                    <div style="color:var(--green);margin-top:4px">🟢 產值貢獻% > 持股占比% → 高效標的，用少量資金貢獻大量產值</div>
-                    <div style="color:#ef4444">🔴 產值貢獻% &lt; 持股占比% → 低效佔資，資金壓住但產值不足</div>
-                    <div style="color:#d97706;margin-top:4px">📌 全場滾動產值總和為 0 時（所有標的近一年無賣出）不顯示</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">💹 總日均產值（含未實現）</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>（該標的累積實現損益 + 目前未實現損益）÷ 累計佔用天數</div>
-                    <div><strong>未實現損益：</strong>（即時股價 - 均成本）× 股數</div>
-                    <div><strong>含意：</strong>假設今天全部出場，含浮盈的整體操作效率</div>
-                    <div style="color:#d97706;margin-top:4px">📌 需更新股價後才會顯示，隨股價即時波動</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📊 未實現損益 / 未實現%</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+            <div style="padding:10px 12px;background:#f8fafc;border-radius:6px;border-left:3px solid #64748b">
+                <div style="font-weight:700;font-size:.8rem;color:#64748b;margin-bottom:4px">未實現損益 / 未實現%</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
                     <div><strong>未實現損益公式：</strong>（即時股價 - 均成本）× 持股股數</div>
                     <div><strong>未實現% 公式：</strong>未實現損益 ÷ 成本基礎 × 100%</div>
-                    <div><strong>成本基礎：</strong>均成本 × 持股股數</div>
                     <div><strong>含意：</strong>若今天出場，帳面浮盈或浮虧的金額與報酬率</div>
+                    <div style="color:#d97706;margin-top:3px">📌 需更新股價後才能正確顯示，隨股價即時波動</div>
                 </div>
             </div>
 
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">⚖️ 持股占比%</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+            <div style="padding:10px 12px;background:#f8fafc;border-radius:6px;border-left:3px solid #64748b">
+                <div style="font-weight:700;font-size:.8rem;color:#64748b;margin-bottom:4px">持股占比%</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
                     <div><strong>公式：</strong>該標的市值 ÷ 全場總市值 × 100%</div>
                     <div><strong>市值：</strong>即時股價 × 持股股數</div>
                     <div><strong>含意：</strong>該標的佔整體持股市值的比重，反映資金集中度</div>
-                    <div style="color:#d97706;margin-top:4px">📌 需更新股價後才能正確計算</div>
+                    <div style="color:#d97706;margin-top:3px">📌 需更新股價後才能正確計算；建議與「產值貢獻%」對比，找出高效/低效標的</div>
                 </div>
             </div>
 
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">📅 YTD%（年初至今總資產成長率）</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
+            <div style="padding:10px 12px;background:#f8fafc;border-radius:6px;border-left:3px solid #64748b">
+                <div style="font-weight:700;font-size:.8rem;color:#64748b;margin-bottom:4px">累積實現損益</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>來源：</strong>從對帳單 CSV 匯入，該標的所有已完成交易的損益加總</div>
+                    <div><strong>含意：</strong>這支股票從開始操作到現在，已實際落袋的總損益</div>
+                    <div style="color:#d97706;margin-top:3px">📌 這是已實現的歷史成績，不含目前持倉的浮盈浮虧</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- B. 效率指標（產值系列） -->
+        <div style="font-weight:700;font-size:.82rem;color:#15803d;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:10px">📈 B. 效率指標（產值系列）</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">💡 產值三兄弟判讀邏輯</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div>本工具有三個日均產值指標，用途各不同：</div>
+                    <div style="margin-top:4px;padding:4px 8px;background:white;border-radius:4px"><strong>歷史日均產值</strong> — 看這支股票整體操作史的平均效率，受操作年資稀釋，跨標的比較不公平</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px"><strong>現役日均產值</strong> — 看本輪持倉的當前效率，反映這輪進場後的成果</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px"><strong>滾動日均產值★</strong> — 近365天固定分母，所有標的可直接橫向比較，是「產線效能排名」的主要依據</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">累計佔用天數</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>每筆交易的（賣出日 - 買入日），全部加總</div>
+                    <div><strong>含意：</strong>這支標的歷史上總共佔用資金幾天，是歷史日均產值的分母</div>
+                    <div style="color:#d97706;margin-top:3px">📌 天數越大代表操作越久，分母膨脹會稀釋歷史日均產值，這是正常現象</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">現役天數</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>今天 - 本輪最早買入日</div>
+                    <div><strong>本輪定義：</strong>找出所有買入日期中，比最後一次賣出日期還要晚的最早買入日；若從未賣出，則從第一次買入起算</div>
+                    <div><strong>含意：</strong>目前這一輪持倉已佔用資金幾天，反映現役資金的壓用時間</div>
+                    <div style="color:#d97706;margin-top:3px">📌 若從未賣出，現役天數 = 從第一次買入至今的總天數</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">歷史日均產值</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>該標的累積實現損益 ÷ 累計佔用天數</div>
+                    <div><strong>含意：</strong>這個標的從開始操作至今，平均每天貢獻多少實現損益</div>
+                    <div style="color:#d97706;margin-top:3px">📌 操作越久天數越大，分母膨脹導致數值被稀釋，不同操作期的標的無法直接公平比較</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">現役日均產值</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>本輪已實現損益 ÷ 現役天數</div>
+                    <div><strong>本輪已實現損益：</strong>買入日期 ≥ 本輪起算日的所有交易損益加總</div>
+                    <div><strong>含意：</strong>這一輪持倉週期內，平均每天已產生多少實現損益</div>
+                    <div style="color:#d97706;margin-top:3px">📌 若本輪尚未賣出任何批次，本輪已實現損益為 0，現役日均產值為 0</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">滾動日均產值（近365天）★</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>近365天內（賣出日在今天往前推一年）已實現損益加總 ÷ 365</div>
+                    <div><strong>分母固定：</strong>永遠是 365，不受操作年資影響</div>
+                    <div><strong>含意：</strong>近一年這個標的平均每天幫你賺多少錢</div>
+                    <div><strong>優點：</strong>所有標的分母相同，可直接橫向比較，反映當前真實產線效能，是產線分析的核心依據</div>
+                    <div style="color:#d97706;margin-top:3px">📌 近一年無賣出紀錄 → 滾動日均產值為 0，代表近一年無實質產值貢獻</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">產值貢獻%</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>該標的滾動日均產值 ÷ 全場所有持股滾動日均產值總和 × 100%</div>
+                    <div><strong>含意：</strong>這個標的佔整體產線產出的比重</div>
+                    <div><strong>判讀：</strong>與「持股占比%」對比，找出資金效率差異</div>
+                    <div style="color:#15803d;margin-top:3px">🟢 產值貢獻% > 持股占比% → 高效標的，用少量資金貢獻大量產值</div>
+                    <div style="color:#ef4444">🔴 產值貢獻% &lt; 持股占比% → 低效佔資，資金壓住但產值不足</div>
+                    <div style="color:#d97706;margin-top:3px">📌 全場滾動產值總和為 0 時（所有標的近一年無賣出）不顯示</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">總日均產值（含未實現）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>（該標的累積實現損益 + 目前未實現損益）÷ 累計佔用天數</div>
+                    <div><strong>未實現損益：</strong>（即時股價 - 均成本）× 股數</div>
+                    <div><strong>含意：</strong>假設今天全部出場，含浮盈的整體操作效率</div>
+                    <div style="color:#d97706;margin-top:3px">📌 需更新股價後才會顯示，隨股價即時波動</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">YTD%（年初至今總資產成長率）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
                     <div><strong>公式：</strong>（目前總資產 - 調整後年初總資產）÷ 調整後年初總資產 × 100%</div>
                     <div><strong>目前總資產：</strong>持股總市值 + 現金餘額</div>
                     <div><strong>調整後年初總資產：</strong>年初快照總資產 + 今年外部淨入金</div>
                     <div><strong>外部入金識別：</strong>從 Transactions CSV 自動抓取今年 Wire Received 和 Journal 類型金額</div>
                     <div><strong>含意：</strong>扣除外部入金影響後，帳戶真實投資成長率</div>
-                    <div style="color:#d97706;margin-top:4px">📌 可在「📐 YTD 基準值校正」面板手動輸入年初資產與嘉信對齊</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#fffbeb;border-radius:6px;border-left:4px solid #d97706">
-                <div style="font-weight:700;font-size:.82rem;color:#d97706;margin-bottom:4px">⚠ 呆滯料預警（列變黃）</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>觸發條件：</strong>累計佔用天數 > 60 天 且 未實現% 介於 -2% ~ +2%</div>
-                    <div><strong>含意：</strong>資金被壓住超過兩個月，但股價橫盤不動，類似工廠的呆滯庫存</div>
-                    <div><strong>建議：</strong>評估是否減倉，釋放資金投入高效標的</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#fef2f2;border-radius:6px;border-left:4px solid #ef4444">
-                <div style="font-weight:700;font-size:.82rem;color:#ef4444;margin-bottom:4px">🚨 停損警告（列變紅）</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>觸發條件：</strong>未實現% &lt; 設定的停損百分比（在備忘錄裡設定）</div>
-                    <div><strong>含意：</strong>浮虧已超過自設停損線，提醒注意風險</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">🎯 解套目標價</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>公式：</strong>= 均成本（不賠錢的最低底線）</div>
-                    <div><strong>含意：</strong>股價回到這個價位才算解套，出場不虧損</div>
-                    <div><strong>子標題：</strong>顯示即時股價距離解套目標的空間百分比</div>
-                    <div style="color:#d97706;margin-top:4px">📌 這是底線，不是目標。回到均成本只是保本，不代表應該出場</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:4px solid var(--green)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--green);margin-bottom:4px">📈 獲利目標價</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div><strong>盈利中（未實現損益 > 0）：</strong>52W 高點 × 98%</div>
-                    <div><strong>虧損中（未實現損益 ≤ 0）：</strong>均成本 × 1.05（回本後再賺 5%）</div>
-                    <div><strong>邏輯：</strong>盈利時以市場歷史高點為參考，不貪在最高點；虧損時首要任務是解套帶小利出場，釋放資金</div>
-                    <div><strong>子標題：</strong>顯示目標價的計算依據與距離%</div>
-                    <div style="color:#d97706;margin-top:4px">📌 52W 高點反映市場在過去一年認可的真實成交價，比分析師預測更可靠</div>
-                    <div style="color:#ef4444;margin-top:2px">⚠ 若 52W 高點持續下修，代表股票基本面可能惡化，應配合「操作建議」欄判斷</div>
-                </div>
-            </div>
-
-            <div style="padding:10px 12px;background:#f0f9ff;border-radius:6px;border-left:4px solid var(--blue)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--blue);margin-bottom:4px">⚙️ 操作建議</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div style="margin-bottom:6px">依優先順序判斷，觸發第一個條件即顯示：</div>
-                    <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">依持倉性質分四路判斷：</div>
-                    <div style="font-weight:600;font-size:.73rem;color:var(--blue);margin:6px 0 3px">🏛 核心</div>
-                    <div style="padding:3px 8px;background:#eff6ff;border-radius:4px;margin-bottom:3px"><span style="color:var(--red);font-weight:600">🔻 超配：建議減碼</span> — 核心實際占比 &gt; 目標比例上限</div>
-                    <div style="padding:3px 8px;background:#eff6ff;border-radius:4px;margin-bottom:6px"><span style="color:var(--blue);font-weight:600">⚙️ 核心持倉：長期續抱</span> — 占比正常，長期持有</div>
-                    <div style="font-weight:600;font-size:.73rem;color:var(--purple);margin:6px 0 3px">🛰 衛星</div>
-                    <div style="padding:3px 8px;background:#f0fdf4;border-radius:4px;margin-bottom:3px"><span style="color:var(--green);font-weight:600">🎯 可分批減碼</span> — 股價 ≥ 獲利目標價</div>
-                    <div style="padding:3px 8px;background:#fffbeb;border-radius:4px;margin-bottom:3px"><span style="color:#d97706;font-weight:600">🔄 觀察換線</span> — 股價 &lt; 52W高點 × 75%（市場信心轉弱，有新標的時優先當資金來源）</div>
-                    <div style="padding:3px 8px;background:#fef2f2;border-radius:4px;margin-bottom:3px"><span style="color:var(--red);font-weight:600">⬇️ 攤平中</span> — 股價 &lt; 均成本（主動向下佈局）</div>
-                    <div style="padding:3px 8px;background:#eff6ff;border-radius:4px;margin-bottom:6px"><span style="color:var(--blue);font-weight:600">⚙️ 產線運行中</span> — 正常持倉，續等</div>
-                    <div style="font-weight:600;font-size:.73rem;color:#d97706;margin:6px 0 3px">🔄 週轉</div>
-                    <div style="padding:3px 8px;background:#f0fdf4;border-radius:4px;margin-bottom:3px"><span style="color:var(--green);font-weight:600">💰 有獲利可提撥</span> — 股價 &gt; 均成本（可用獲利換倉或攤平其他標的）</div>
-                    <div style="padding:3px 8px;background:#fffbeb;border-radius:4px;margin-bottom:6px"><span style="color:#d97706;font-weight:600">⏳ 等回平盤</span> — 股價 ≤ 均成本</div>
-                    <div style="font-weight:600;font-size:.73rem;color:var(--text2);margin:6px 0 3px">— 未設定</div>
-                    <div style="padding:3px 8px;background:#f9fafb;border-radius:4px;margin-bottom:3px;font-size:.72rem;color:var(--text2)">維持舊有四分類邏輯（向下相容）</div>
-                    <div style="color:#d97706;margin-top:6px">📌 持倉性質在表格「持倉性質」欄下拉設定；核心/衛星/週轉比例可在「⚖️ 持倉比例目標」面板調整</div>
-                </div>
-            </div>
-
-            <!-- [V4.110] 持倉性質說明 -->
-            <div style="padding:10px 12px;background:#f5f3ff;border-radius:6px;border-left:4px solid var(--purple)">
-                <div style="font-weight:700;font-size:.82rem;color:var(--purple);margin-bottom:4px">🏷 持倉性質</div>
-                <div style="font-size:.78rem;color:var(--text);line-height:1.6">
-                    <div style="margin-bottom:6px">手動標記每支持股的操作角色，三路並行管理：</div>
-                    <div style="padding:4px 8px;background:#eff6ff;border-radius:4px;margin-bottom:4px"><span style="color:#2563eb;font-weight:600">🏛 核心</span> — 長期持有、不輕易出場的主力倉位（例：NVDA、MSFT 等大型基本面標的）</div>
-                    <div style="padding:4px 8px;background:#f5f3ff;border-radius:4px;margin-bottom:4px"><span style="color:#7c3aed;font-weight:600">🛰 衛星</span> — 中長期持有、具主題性或成長性的輔助倉位（例：ASTS、RKLB 等主題成長股）</div>
-                    <div style="padding:4px 8px;background:#fffbeb;border-radius:4px;margin-bottom:4px"><span style="color:#d97706;font-weight:600">🔄 週轉</span> — 短中期操作、著重資金周轉效率的靈活倉位（配合日均產值指標進出）</div>
-                    <div style="padding:4px 8px;background:var(--bg);border-radius:4px"><span style="color:#9ca3af;font-weight:600">— 未設定</span> — 尚未分類，建議分類後管理效果更佳</div>
-                    <div style="color:#d97706;margin-top:6px">📌 持倉性質是主觀標記，不影響任何計算。建議配合「操作建議」欄一起判讀：週轉標的更積極執行減碼/換倉，核心標的即使達標也可選擇續抱</div>
+                    <div style="color:#d97706;margin-top:3px">📌 可在「📐 YTD 基準值校正」面板手動輸入年初資產與嘉信對齊</div>
                 </div>
             </div>
 
         </div>
+
+        <!-- C. 風險與目標 -->
+        <div style="font-weight:700;font-size:.82rem;color:#dc2626;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:10px">⚠️ C. 風險與目標</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+            <div style="padding:10px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626">
+                <div style="font-weight:700;font-size:.8rem;color:#dc2626;margin-bottom:4px">52週位置%</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>公式：</strong>（即時股價 - 52W低點）÷（52W高點 - 52W低點）× 100%</div>
+                    <div><strong>含意：</strong>目前股價落在過去一年高低點區間的哪個位置</div>
+                    <div style="color:#15803d;margin-top:3px">🟢 位置高（>70%）→ 強勢股，市場認可</div>
+                    <div style="color:#d97706">🟡 位置中（30%~70%）→ 正常震盪區間</div>
+                    <div style="color:#ef4444">🔴 位置低（&lt;30%）→ 相對低點，需留意是否基本面惡化</div>
+                    <div style="color:#d97706;margin-top:3px">📌 需更新股價後才能顯示；與獲利目標價邏輯連動</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626">
+                <div style="font-weight:700;font-size:.8rem;color:#dc2626;margin-bottom:4px">解套目標價 / 獲利目標價</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>解套目標價：</strong>= 均成本（不賠錢的最低底線）</div>
+                    <div><strong>子標題：</strong>顯示即時股價距離解套目標的空間百分比</div>
+                    <div style="margin-top:4px"><strong>獲利目標價（盈利中，未實現 > 0）：</strong>52W 高點 × 98%</div>
+                    <div><strong>獲利目標價（虧損中，未實現 ≤ 0）：</strong>均成本 × 1.05（回本後再賺 5%）</div>
+                    <div><strong>邏輯：</strong>盈利時以市場歷史高點為參考，不貪在最高點；虧損時首要任務是解套帶小利出場，釋放資金</div>
+                    <div style="color:#d97706;margin-top:3px">📌 解套目標是底線，不是出場點。52W 高點反映市場過去一年認可的真實成交價，比分析師預測更可靠</div>
+                    <div style="color:#ef4444;margin-top:2px">⚠ 若 52W 高點持續下修，代表股票基本面可能惡化，應配合「操作建議」欄判斷</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626">
+                <div style="font-weight:700;font-size:.8rem;color:#dc2626;margin-bottom:4px">呆滯料預警（列變黃）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>觸發條件：</strong>累計佔用天數 > 60 天 且 未實現% 介於 -2% ~ +2%</div>
+                    <div><strong>含意：</strong>資金被壓住超過兩個月，但股價橫盤不動，類似工廠的呆滯庫存</div>
+                    <div><strong>建議：</strong>評估是否減倉，釋放資金投入高效標的</div>
+                    <div style="color:#d97706;margin-top:3px">📌 預警不代表一定要賣，需配合持倉性質與操作建議綜合判斷</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626">
+                <div style="font-weight:700;font-size:.8rem;color:#dc2626;margin-bottom:4px">停損警告（列變紅）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div><strong>觸發條件：</strong>未實現% &lt; 設定的停損百分比（在備忘錄裡設定）</div>
+                    <div><strong>含意：</strong>浮虧已超過自設停損線，提醒注意風險</div>
+                    <div style="color:#d97706;margin-top:3px">📌 停損百分比為負值（例：-15 代表虧損 15% 觸發）</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- D. 分類管理 -->
+        <div style="font-weight:700;font-size:.82rem;color:#7c3aed;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:10px">🏷 D. 分類管理</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+            <div style="padding:10px 12px;background:#f5f3ff;border-radius:6px;border-left:3px solid #7c3aed">
+                <div style="font-weight:700;font-size:.8rem;color:#7c3aed;margin-bottom:4px">持倉性質（核心 / 衛星 / 週轉 / 未設定）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div style="margin-bottom:4px">手動標記每支持股的操作角色，三路並行管理：</div>
+                    <div style="padding:4px 8px;background:#eff6ff;border-radius:4px;margin-bottom:3px"><span style="color:#2563eb;font-weight:600">🏛 核心</span> — 長期持有、不輕易出場的主力倉位（例：NVDA、MSFT 等大型基本面標的）</div>
+                    <div style="padding:4px 8px;background:#f5f3ff;border-radius:4px;margin-bottom:3px"><span style="color:#7c3aed;font-weight:600">🛰 衛星</span> — 中長期持有、具主題性或成長性的輔助倉位（例：ASTS、RKLB 等主題成長股）</div>
+                    <div style="padding:4px 8px;background:#fffbeb;border-radius:4px;margin-bottom:3px"><span style="color:#d97706;font-weight:600">🔄 週轉</span> — 短中期操作、著重資金周轉效率的靈活倉位（配合日均產值指標進出）</div>
+                    <div style="padding:4px 8px;background:var(--bg);border-radius:4px"><span style="color:#9ca3af;font-weight:600">— 未設定</span> — 尚未分類，建議分類後管理效果更佳</div>
+                    <div style="color:#d97706;margin-top:4px">📌 持倉性質是主觀標記，不影響任何計算，影響的是「操作建議」邏輯路線；核心/衛星/週轉比例可在「⚖️ 持倉比例目標」面板調整</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f5f3ff;border-radius:6px;border-left:3px solid #7c3aed">
+                <div style="font-weight:700;font-size:.8rem;color:#7c3aed;margin-bottom:4px">持倉態度（積極佈局 / 中性觀察 / 等待換線）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div style="margin-bottom:4px">標記你對每支標的的操作意圖，影響操作建議欄與產線分析的建議方向：</div>
+                    <div style="padding:4px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="font-weight:600">🔼 積極佈局</span> — 看好此標的，漲了追強、跌了攤平都算積極加碼。52W低點時操作建議顯示「攤平中」而非「觀察換線」；分析引擎第二層不列換線候選，高效時強烈建議加碼</div>
+                    <div style="padding:4px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="font-weight:600">👁 中性觀察</span> — 持有但不急著動，等訊號再決定。分析引擎依標準邏輯判斷</div>
+                    <div style="padding:4px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="font-weight:600">🔄 等待換線</span> — 有更好去處就優先換掉，是資金來源的優先候選。分析引擎第二層標記「優先換線」；高效時不列加碼候選</div>
+                    <div style="color:#d97706;margin-top:4px">📌 在表格「持倉態度」欄下拉設定；未設定預設為中性觀察邏輯</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- E. 操作建議判讀 -->
+        <div style="font-weight:700;font-size:.82rem;color:#2563eb;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:10px">⚙️ E. 操作建議判讀</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+            <div style="padding:10px 12px;background:#eff6ff;border-radius:6px;border-left:3px solid #2563eb">
+                <div style="font-weight:700;font-size:.8rem;color:#2563eb;margin-bottom:4px">核心原則</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div>依優先順序判斷，觸發第一個條件即顯示，後續條件不再判斷。</div>
+                    <div style="margin-top:4px">依持倉性質分四路判斷，各路邏輯完全獨立。「持倉態度」會進一步影響建議文字與產線分析引擎的行為。</div>
+                    <div style="color:#d97706;margin-top:4px">📌 持倉性質在表格「持倉性質」欄下拉設定；核心/衛星/週轉比例可在「⚖️ 持倉比例目標」面板調整</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#eff6ff;border-radius:6px;border-left:3px solid #2563eb">
+                <div style="font-weight:700;font-size:.8rem;color:#2563eb;margin-bottom:4px">🏛 核心的建議邏輯</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div style="padding:3px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="color:#ef4444;font-weight:600">🔻 超配：建議減碼</span> — 核心實際占比 &gt; 目標比例上限</div>
+                    <div style="padding:3px 8px;background:white;border-radius:4px"><span style="color:#2563eb;font-weight:600">⚙️ 核心持倉：長期續抱</span> — 占比正常，長期持有</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#eff6ff;border-radius:6px;border-left:3px solid #2563eb">
+                <div style="font-weight:700;font-size:.8rem;color:#2563eb;margin-bottom:4px">🛰 衛星的建議邏輯</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div style="padding:3px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="color:#15803d;font-weight:600">🎯 可分批減碼</span> — 股價 ≥ 獲利目標價</div>
+                    <div style="padding:3px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="color:#d97706;font-weight:600">🔄 觀察換線</span> — 股價 &lt; 52W高點 × 75%（市場信心轉弱，有新標的時優先當資金來源）</div>
+                    <div style="padding:3px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="color:#ef4444;font-weight:600">⬇️ 攤平中</span> — 股價 &lt; 均成本（主動向下佈局；若持倉態度為「積極佈局」，52W低點區也顯示此訊號）</div>
+                    <div style="padding:3px 8px;background:white;border-radius:4px"><span style="color:#2563eb;font-weight:600">⚙️ 產線運行中</span> — 正常持倉，續等</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#eff6ff;border-radius:6px;border-left:3px solid #2563eb">
+                <div style="font-weight:700;font-size:.8rem;color:#2563eb;margin-bottom:4px">🔄 週轉的建議邏輯</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div style="padding:3px 8px;background:white;border-radius:4px;margin-bottom:3px"><span style="color:#15803d;font-weight:600">💰 有獲利可提撥</span> — 股價 &gt; 均成本（可用獲利換倉或攤平其他標的）</div>
+                    <div style="padding:3px 8px;background:white;border-radius:4px"><span style="color:#d97706;font-weight:600">⏳ 等回平盤</span> — 股價 ≤ 均成本</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- F. 產線分析說明 -->
+        <div style="font-weight:700;font-size:.82rem;color:#15803d;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:10px">🏭 F. 產線分析說明</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">兩層獨立，各有目的</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div>產線分析分為兩層，彼此獨立，不互相影響：</div>
+                    <div style="margin-top:4px;padding:4px 8px;background:white;border-radius:4px"><strong>第一層：比例校正</strong> — 核心/衛星/週轉的占比是否符合目標？超配或欠配的是哪一路？</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px"><strong>第二層：製程優化</strong> — 在現有持倉裡，哪些標的高效應加碼，哪些低效應換線，資金如何在標的間重新分配？</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">前置輸入說明</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div>執行產線分析前需確認以下資料已備齊：</div>
+                    <div style="margin-top:4px;padding:4px 8px;background:white;border-radius:4px">① 持倉已匯入（有現股、均成本資料）</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px">② 對帳單已匯入（有實現損益資料，影響滾動日均產值計算）</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px">③ 股價已更新（影響市值、未實現損益、持股占比計算）</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px">④ 持倉性質已設定（決定走哪一路判斷邏輯）</div>
+                    <div style="color:#d97706;margin-top:4px">📌 資料越完整，分析越準確；未設定持倉性質的標的走舊有四分類邏輯（向下相容）</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">第一層：比例校正</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div>計算核心/衛星/週轉各路的實際市值占比，與「⚖️ 持倉比例目標」設定的目標區間比對：</div>
+                    <div style="margin-top:4px;padding:4px 8px;background:white;border-radius:4px">超配（實際 &gt; 上限）→ 點名哪路超配，建議從該路標的中選擇減碼標的</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px">欠配（實際 &lt; 下限）→ 點名哪路欠配，建議補充該路倉位</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px">比例正常 → 無需調整，進入第二層分析</div>
+                    <div style="color:#d97706;margin-top:4px">📌 第一層優先，比例失衡時應先校正結構，再看個別標的效率</div>
+                </div>
+            </div>
+
+            <div style="padding:10px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #16a34a">
+                <div style="font-weight:700;font-size:.8rem;color:#15803d;margin-bottom:4px">第二層：製程優化（含衛星內貢獻%定義）</div>
+                <div style="font-size:.76rem;color:var(--text);line-height:1.7">
+                    <div>以滾動日均產值為效能指標，在衛星/週轉標的中找出：</div>
+                    <div style="margin-top:4px;padding:4px 8px;background:white;border-radius:4px"><strong>高效標的（加碼候選）</strong> — 產值貢獻% &gt; 持股占比%，且持倉態度非「等待換線」</div>
+                    <div style="margin-top:3px;padding:4px 8px;background:white;border-radius:4px"><strong>低效標的（換線候選）</strong> — 產值貢獻% &lt; 持股占比%，或持倉態度為「等待換線」，或操作建議顯示「觀察換線」</div>
+                    <div style="margin-top:4px"><strong>衛星內貢獻%：</strong>該衛星標的滾動日均產值 ÷ 全部衛星標的滾動日均產值總和 × 100%，反映在衛星這一路裡的相對貢獻</div>
+                    <div style="color:#d97706;margin-top:4px">📌 積極佈局的標的即使高效也不列換線候選；等待換線的標的即使高效也不列加碼候選</div>
+                </div>
+            </div>
+
+        </div>
+
     </div>
 
-    <!-- 注意事項 -->
+        <!-- 注意事項 -->
     <div id="helpTab-risk" style="display:none">
         <div style="font-weight:700;margin-bottom:8px;color:var(--red)">⚠️ 重建歷史快照</div>
         <div style="font-size:.82rem;color:var(--text);line-height:1.8;margin-bottom:16px;padding:10px;background:#fef9ec;border:1px solid #fcd34d;border-radius:6px">
@@ -1372,6 +1556,98 @@ input[type=file]::file-selector-button {
     <div class="flex-row" style="margin-top:20px;justify-content:flex-end">
         <button class="btn btn-outline btn-sm" onclick="closeExportModal()">取消</button>
         <button class="btn btn-primary btn-sm" onclick="doExportReport()">📥 匯出</button>
+    </div>
+</div>
+</div>
+
+<!-- ── 產線分析前置輸入 MODAL ── -->
+<!-- [V4.114] 前置輸入：新入資金 + 新標的（可選填） -->
+<div class="modal-backdrop" id="analysisInputModal" style="display:none">
+<div class="modal" style="max-width:540px;width:95vw">
+    <h3 style="margin:0 0 16px;font-size:1rem;font-weight:700">📖 產線分析</h3>
+    <div style="font-size:.78rem;color:var(--text2);margin-bottom:16px">分析現有持倉機台，可選填新入資金或新標的一起納入模擬。</div>
+
+    <!-- 新入資金 -->
+    <div style="margin-bottom:14px">
+        <div style="font-size:.75rem;font-weight:600;margin-bottom:6px">💰 新入資金（選填）</div>
+        <input class="input" id="analysisNewCash" type="number" placeholder="例如：10000" style="width:100%" oninput="updateRemainCash()">
+    </div>
+
+    <!-- 新標的 -->
+    <!-- [V4.116] 新標的從新入資金撥入，即時顯示剩餘可分配金額 -->
+    <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:.75rem;font-weight:600">🆕 新標的（從新入資金撥入，選填）</div>
+            <div style="font-size:.75rem;color:var(--text2)">剩餘可分配：<strong id="analysisRemainCash" style="color:var(--blue)">$0</strong></div>
+        </div>
+        <div id="analysisNewSymbolRows">
+            <div class="analysis-sym-row" style="display:grid;grid-template-columns:100px 120px 1fr 32px;gap:6px;margin-bottom:6px">
+                <input class="input input-sm" placeholder="Symbol" style="font-size:.78rem">
+                <select class="input input-sm" style="font-size:.78rem">
+                    <option value="satellite">🛰 衛星</option>
+                    <option value="core">🏛 核心</option>
+                    <option value="turnover">🔄 週轉</option>
+                </select>
+                <input class="input input-sm" type="number" placeholder="投入金額 $" style="font-size:.78rem" oninput="updateRemainCash()">
+                <button class="btn btn-outline btn-sm" onclick="this.closest('.analysis-sym-row').remove();updateRemainCash()" style="padding:0 8px">✕</button>
+            </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="addAnalysisSymRow()" style="font-size:.72rem;margin-top:4px">＋ 新增標的</button>
+    </div>
+
+    <div class="btn-row" style="justify-content:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="closeModal('analysisInputModal')">取消</button>
+        <button class="btn btn-primary btn-sm" onclick="runAnalysis()">開始分析 →</button>
+    </div>
+</div>
+</div>
+
+<!-- ── 產線分析結果 MODAL ── -->
+<div class="modal-backdrop" id="analysisResultModal" style="display:none">
+<div class="modal" style="max-width:720px;width:95vw;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <!-- 標題列 -->
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+        <div style="font-weight:700;font-size:.95rem" id="analysisResultTitle">📖 產線分析報告</div>
+        <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-outline btn-sm" onclick="copyAnalysis()" title="複製文字">📋 複製</button>
+            <button class="btn btn-outline btn-sm" onclick="downloadAnalysis()" title="下載 txt">⬇️ 下載</button>
+            <button class="btn btn-outline btn-sm" onclick="closeModal('analysisResultModal')">✕</button>
+        </div>
+    </div>
+    <!-- 內容 -->
+    <div id="analysisResultBody" style="overflow-y:auto;padding:20px;flex:1;font-size:.82rem;line-height:1.7"></div>
+</div>
+</div>
+
+<!-- ── [V4.122] 欄位管理 MODAL ── -->
+<div class="modal-backdrop" id="colMgrModal" style="display:none">
+<div class="modal" style="max-width:560px;width:95vw;max-height:85vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <!-- 標題列 -->
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:700;font-size:.95rem">⚙️ 欄位管理</div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('colMgrModal')">✕ 關閉</button>
+    </div>
+    <!-- 說明 -->
+    <div style="padding:10px 20px;font-size:.72rem;color:var(--text2);border-bottom:1px solid var(--border);flex-shrink:0">
+        點擊欄位名稱可切換顯示／隱藏。右鍵（手機長按）欄位標題也可快速操作。
+    </div>
+    <!-- 內容（可捲動）-->
+    <div style="flex:1;overflow-y:auto;padding:16px 20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+                <div style="font-size:.75rem;font-weight:600;color:var(--green);margin-bottom:8px">✅ 顯示中</div>
+                <div id="colMgrVisible" style="display:flex;flex-direction:column;gap:4px"></div>
+            </div>
+            <div>
+                <div style="font-size:.75rem;font-weight:600;color:var(--text2);margin-bottom:8px">🚫 已隱藏</div>
+                <div id="colMgrHidden" style="display:flex;flex-direction:column;gap:4px"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 底部按鈕 -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="resetHiddenCols()">重置為全顯示</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal('colMgrModal')">完成</button>
     </div>
 </div>
 </div>
@@ -1825,7 +2101,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.113 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.128 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -1870,6 +2146,8 @@ const COL_DEFS = [
     // 原因：使用者不需手填目標價，需要的是標示核心/衛星/週轉的分類
     // 原邏輯：{ key:'target', label:'目標售價' } — 已改為 posType
     { key:'posType',      label:'持倉性質',     align:'left',  sortable:true  },
+    // [V4.118] 新增持倉態度欄位，從 notes.attitude 獨立出來
+    { key:'attitude',     label:'持倉態度',     align:'left',  sortable:true  },
     // [V4.104] 新增決策三欄位：解套目標價、獲利目標價、操作建議
     // 原因：整合生管決策邏輯，讓使用者一眼看出每支股票的操作方向
     { key:'breakeven',    label:'解套目標價',   align:'right', sortable:true  },
@@ -1882,6 +2160,11 @@ let colOrder = JSON.parse(localStorage.getItem('hunter_col_order') || 'null') ||
 colOrder = colOrder.filter(k => COL_DEFS.some(c=>c.key===k));
 // 加入新欄位（若 colOrder 沒有）
 DEFAULT_COL_ORDER.forEach(k => { if (!colOrder.includes(k)) colOrder.push(k); });
+
+// [V4.121] 隱藏欄位集合：存入 localStorage，備份帶走
+// 原因：讓使用者可透過右鍵選單隱藏/顯示欄位，設定持久化
+// 影響範圍：renderTableHead（右鍵選單）、render（跳過隱藏欄）、save/load/clear
+let hiddenCols = new Set(JSON.parse(localStorage.getItem('hunter_hidden_cols') || '[]'));
 
 // ══════════════════════════════════════════════════════
 //  STATE
@@ -1904,6 +2187,10 @@ let notes       = {};   // 備忘錄 { SYM: { target, entryReason, stopLoss } }
 let posTypes    = {};   // { SYM: 'core'|'satellite'|'turnover'|'' }
 // [V4.110] 持倉比例目標設定（預設 核心50 衛星40 週轉10）
 let posTypeTargets = { core: 50, satellite: 40, turnover: 10 };
+// [V4.118] 持倉態度設定：每支股票的操作意圖
+// 原因：從 notes.attitude 獨立出來，與 posType 同層級管理
+// 影響範圍：decision 欄、分析引擎、備份/還原、clearDataVariables、報表
+let posAttitudes = {}; // { SYM: 'active'|'neutral'|'exit'|'' }
 let monthlyGoal = 0;    // 保留相容性
 let annualGoal  = 0;    // 年度目標金額
 // [V4.66] 基準值校正 — 按年份儲存嘉信真實年初總資產
@@ -1965,7 +2252,8 @@ function saveCurrentUser() {
     if (!activeUser) return;
     // [V4.66] 新增 ytdBaseOverride 到儲存資料
     // [V4.110] 加入 posTypes、posTypeTargets 到存檔資料
-    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash, weekData, notes, monthlyGoal, annualGoal, ytdBaseOverride, posTypes, posTypeTargets };
+    // [V4.118] 加入 posAttitudes 到存檔資料
+    const data = { inventory, stats, prices, rawTrades, initialPricesSnapshot, posSnapshots, txnData, currentCash, weekData, notes, monthlyGoal, annualGoal, ytdBaseOverride, posTypes, posTypeTargets, posAttitudes };
     localStorage.setItem(`hunter_${activeUser}_data`, JSON.stringify(data));
     const now = new Date().toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     document.getElementById('lastSaved').textContent = `已存檔 ${now}`;
@@ -2015,6 +2303,8 @@ function loadCurrentUser() {
             // [V4.110] 載入持倉性質設定，舊備份無此欄位時預設空物件（顯示「未設定」）
             posTypes = d.posTypes || {};
             posTypeTargets = d.posTypeTargets || { core: 50, satellite: 40, turnover: 10 };
+            // [V4.118] 載入持倉態度，舊備份無此欄位時預設空物件
+            posAttitudes = d.posAttitudes || {};
         } catch(e) { inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; }
     } else {
         inventory=[]; stats={}; prices={}; rawTrades=[]; posSnapshots=[]; txnData=[]; initialPricesSnapshot={};
@@ -3191,6 +3481,25 @@ function sortBy(col) {
     render();
 }
 
+// [V4.128] getRollingGain 提升為全域函數
+// 原因：原本定義在 render() 內部，generateReportForUser() 無法呼叫，各自維護副本導致邏輯分歧風險
+// 影響範圍：render() 內部 getRollingGain 改呼叫此全域版；報表 getReportRollingGain 刪除改呼叫此函數
+function getRollingGain(sym) {
+    const bd = new Date(); bd.setFullYear(bd.getFullYear() - 1);
+    const baseDateStr = bd.toISOString().slice(0, 10);
+    return rawTrades.filter(t => {
+        if (t.sym !== sym) return false;
+        const cd = t.closeDate || '';
+        if (!cd) return false;
+        const parts = cd.split('/');
+        if (parts.length === 3) {
+            const iso = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+            return iso >= baseDateStr;
+        }
+        return cd >= baseDateStr;
+    }).reduce((sum, t) => sum + (t.gain || 0), 0);
+}
+
 // [V4.67] getActiveDays / getActiveGain 提升到全域
 // 原因：原本定義在 render() 內部，getVal() 無法呼叫，導致現役天數/現役日均產值排序無效
 // 影響範圍：getVal() activeDays/activeDailyOut 排序、render() 內部 cellMap
@@ -3202,16 +3511,30 @@ function _parseTradeDateGlobal(dateStr) {
     return dateStr;
 }
 function getActiveDays(sym) {
+    // [V4.115] Bug 修正：原邏輯只查 rawTrades（GainLoss CSV），從未賣出的標的找不到買入日，顯示 —
+    // 修正：優先用 rawTrades 算本輪起點；若 rawTrades 無此標的（從未賣出），
+    //        改從 txnData 找最早的 Buy 紀錄作為 fallback
+    // 影響範圍：現役天數欄位、現役日均產值、分析引擎 holdDays、isStale 判斷
     const symTrades = rawTrades.filter(t => t.sym === sym);
-    if (!symTrades.length) return 0;
-    const openDates  = symTrades.map(t => _parseTradeDateGlobal(t.openDate)).filter(Boolean).sort();
-    const closeDates = symTrades.map(t => _parseTradeDateGlobal(t.closeDate)).filter(Boolean).sort();
-    const lastClose  = closeDates[closeDates.length - 1] || '';
-    const newRoundOpens = openDates.filter(d => d > lastClose);
-    const startDate = newRoundOpens.length > 0 ? newRoundOpens[0] : (openDates[0] || '');
-    if (!startDate) return 0;
+    if (symTrades.length) {
+        const openDates  = symTrades.map(t => _parseTradeDateGlobal(t.openDate)).filter(Boolean).sort();
+        const closeDates = symTrades.map(t => _parseTradeDateGlobal(t.closeDate)).filter(Boolean).sort();
+        const lastClose  = closeDates[closeDates.length - 1] || '';
+        const newRoundOpens = openDates.filter(d => d > lastClose);
+        const startDate = newRoundOpens.length > 0 ? newRoundOpens[0] : (openDates[0] || '');
+        if (startDate) {
+            const today = new Date().toISOString().slice(0,10);
+            return Math.max(0, Math.ceil((new Date(today) - new Date(startDate)) / 86400000));
+        }
+    }
+    // Fallback：從 txnData 找最早的 Buy 紀錄（從未賣出的標的）
+    const buyDates = (txnData || [])
+        .filter(t => t.symbol === sym && t.action === 'Buy' && t.date)
+        .map(t => t.date)
+        .sort();
+    if (!buyDates.length) return 0;
     const today = new Date().toISOString().slice(0,10);
-    return Math.max(0, Math.ceil((new Date(today) - new Date(startDate)) / 86400000));
+    return Math.max(0, Math.ceil((new Date(today) - new Date(buyDates[0])) / 86400000));
 }
 function getActiveGain(sym) {
     const symTrades = rawTrades.filter(t => t.sym === sym);
@@ -3264,7 +3587,11 @@ function getVal(item,col) {
             const pt = posTypes[item.Symbol] || '';
             return pt==='core' ? 3 : pt==='satellite' ? 2 : pt==='turnover' ? 1 : 0;
         }
-        // [V4.104] 解套目標價 = 均成本
+        // [V4.118] 持倉態度排序：積極=3, 中性=2, 等待=1, 未設定=0
+        case 'attitude': {
+            const at = posAttitudes[item.Symbol] || '';
+            return at==='active' ? 3 : at==='neutral' ? 2 : at==='exit' ? 1 : 0;
+        }
         case 'breakeven': return parseFloat(item.Cost) || 0;
         // [V4.104] 獲利目標價排序
         case 'profitTarget': {
@@ -3302,9 +3629,13 @@ function getVal(item,col) {
                 return pct_ > (posTypeTargets?.core ?? 50) ? 5 : 3;
             }
             if (posT_ === 'satellite') {
+                // [V4.127] 補入持倉態度判斷，排序權重與 cellMap 顯示標籤一致
+                // 原因：V4.118 只更新 cellMap，getVal 排序未同步，積極佈局+52W低點仍排在觀察換線位置
+                // 影響範圍：操作建議欄排序，攤平中=1，觀察換線=2，兩者排序意義不同
+                const att__ = posAttitudes[item.Symbol] || '';
                 const pt_ = (ur__ > 0 && w52_) ? w52_.high52 * 0.98 : co_ * 1.05;
                 if (p >= pt_) return 4;
-                if (w52_ && p < w52_.high52 * 0.75) return 2;
+                if (w52_ && p < w52_.high52 * 0.75) return att__ === 'active' ? 1 : 2;
                 if (p < co_) return 1;
                 return 3;
             }
@@ -3366,7 +3697,9 @@ function renderTableHead() {
     const tr = document.getElementById('mainTblHead');
     tr.innerHTML = '';
     colOrder.forEach(key => {
-        const def = COL_DEFS.find(c=>c.key===key); if (!def) return;
+        const def = COL_DEFS.find(c=>c.key===key);
+        // [V4.121] 跳過已隱藏的欄位
+        if (!def || hiddenCols.has(key)) return;
         const th = document.createElement('th');
         th.dataset.col = key;
         // [V4.105] 加入 sortable 判斷，sortable:false 的欄位不顯示排序箭頭也不掛 onclick
@@ -3394,8 +3727,131 @@ function renderTableHead() {
                 renderTableHead(); render();
             });
         }
+        // [V4.121] 右鍵選單：隱藏此欄 / 顯示已隱藏欄位
+        // [V4.122] 加入手機長按支援（touchstart/touchend 計時 500ms）
+        if (!def.frozen) {
+            th.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                showColContextMenu(e.clientX, e.clientY, key);
+            });
+            let _touchTimer = null;
+            th.addEventListener('touchstart', e => {
+                _touchTimer = setTimeout(() => {
+                    const t = e.touches[0];
+                    showColContextMenu(t.clientX, t.clientY, key);
+                }, 500);
+            }, { passive: true });
+            th.addEventListener('touchend', () => clearTimeout(_touchTimer));
+            th.addEventListener('touchmove', () => clearTimeout(_touchTimer));
+        }
         tr.appendChild(th);
     });
+}
+
+// [V4.121] 欄位右鍵選單
+function showColContextMenu(x, y, targetKey) {
+    document.getElementById('colContextMenu')?.remove();
+    const menu = document.createElement('div');
+    menu.id = 'colContextMenu';
+    menu.style.cssText = 'position:fixed;z-index:9999;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:6px 0;min-width:180px;font-size:.8rem';
+    menu.style.left = Math.min(x, window.innerWidth-200)+'px';
+    menu.style.top = Math.min(y, window.innerHeight-200)+'px';
+
+    // 隱藏目前這欄
+    const hideItem = document.createElement('div');
+    hideItem.style.cssText = 'padding:7px 14px;cursor:pointer;color:#dc2626';
+    const def = COL_DEFS.find(c=>c.key===targetKey);
+    hideItem.textContent = '隱藏「'+(def?.label||targetKey)+'」';
+    hideItem.onmouseenter = ()=>hideItem.style.background='#fef2f2';
+    hideItem.onmouseleave = ()=>hideItem.style.background='';
+    hideItem.onclick = () => { hiddenCols.add(targetKey); saveHiddenCols(); renderTableHead(); render(); menu.remove(); };
+    menu.appendChild(hideItem);
+
+    // 顯示已隱藏的欄位
+    const hidden = COL_DEFS.filter(c => hiddenCols.has(c.key));
+    if (hidden.length) {
+        const sep = document.createElement('div');
+        sep.style.cssText = 'border-top:1px solid var(--border);margin:4px 0';
+        menu.appendChild(sep);
+        const label = document.createElement('div');
+        label.style.cssText = 'padding:4px 14px;font-size:.72rem;color:var(--text2)';
+        label.textContent = '顯示隱藏的欄位';
+        menu.appendChild(label);
+        hidden.forEach(hdef => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:7px 14px;cursor:pointer;color:#16a34a';
+            item.textContent = '+ '+hdef.label;
+            item.onmouseenter = ()=>item.style.background='#f0fdf4';
+            item.onmouseleave = ()=>item.style.background='';
+            item.onclick = () => { hiddenCols.delete(hdef.key); saveHiddenCols(); renderTableHead(); render(); menu.remove(); };
+            menu.appendChild(item);
+        });
+    }
+
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', () => menu.remove(), { once:true }), 0);
+}
+
+function saveHiddenCols() {
+    localStorage.setItem('hunter_hidden_cols', JSON.stringify([...hiddenCols]));
+}
+
+// [V4.122] 欄位管理 Modal
+function openColMgrModal() {
+    renderColMgr();
+    document.getElementById('colMgrModal').style.display = 'flex';
+}
+
+function renderColMgr() {
+    const visEl = document.getElementById('colMgrVisible');
+    const hidEl = document.getElementById('colMgrHidden');
+    if (!visEl || !hidEl) return;
+
+    const btnStyle = 'padding:6px 10px;border-radius:6px;font-size:.78rem;cursor:pointer;text-align:left;border:1px solid var(--border);background:white;width:100%';
+
+    // 顯示中的欄位（按 colOrder 順序，跳過已隱藏）
+    visEl.innerHTML = '';
+    colOrder.forEach(key => {
+        const def = COL_DEFS.find(c=>c.key===key);
+        if (!def || hiddenCols.has(key)) return;
+        const btn = document.createElement('button');
+        btn.style.cssText = btnStyle + ';color:var(--text)';
+        btn.textContent = (def.frozen ? '🔒 ' : '') + def.label;
+        if (!def.frozen) {
+            btn.onmouseenter = () => btn.style.background = '#fef2f2';
+            btn.onmouseleave = () => btn.style.background = 'white';
+            btn.onclick = () => { hiddenCols.add(key); saveHiddenCols(); renderTableHead(); render(); renderColMgr(); };
+        } else {
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'default';
+        }
+        visEl.appendChild(btn);
+    });
+
+    // 已隱藏的欄位
+    hidEl.innerHTML = '';
+    const hiddenList = COL_DEFS.filter(c => hiddenCols.has(c.key));
+    if (!hiddenList.length) {
+        hidEl.innerHTML = '<div style="font-size:.75rem;color:var(--text3);padding:6px">無隱藏欄位</div>';
+    } else {
+        hiddenList.forEach(def => {
+            const btn = document.createElement('button');
+            btn.style.cssText = btnStyle + ';color:#16a34a;border-color:#bbf7d0';
+            btn.textContent = '+ ' + def.label;
+            btn.onmouseenter = () => btn.style.background = '#f0fdf4';
+            btn.onmouseleave = () => btn.style.background = 'white';
+            btn.onclick = () => { hiddenCols.delete(def.key); saveHiddenCols(); renderTableHead(); render(); renderColMgr(); };
+            hidEl.appendChild(btn);
+        });
+    }
+}
+
+function resetHiddenCols() {
+    hiddenCols = new Set();
+    saveHiddenCols();
+    renderTableHead();
+    render();
+    renderColMgr();
 }
 
 // ══════════════════════════════════════════════════════
@@ -3410,30 +3866,8 @@ function render() {
     // 總市值（for 占比）
     const totalMV = inventory.reduce((sum,it)=>{ const pp=prices[it.Symbol]; return pp!==undefined?sum+pp*parseFloat(it.Shares):sum; },0);
 
-    // 滾動日均產值：基準日 = 最後更新股價日期往回推365天
-    const priceTimeTag = document.getElementById('priceTimeTag');
-    const lastPriceText = priceTimeTag?.textContent || '';
-    const lastPriceMatch = lastPriceText.match(/(\d{2}\/\d{2})\s+(\d{2}:\d{2})/);
-    const baseDate = new Date();
-    baseDate.setFullYear(baseDate.getFullYear() - 1);
-    const baseDateStr = baseDate.toISOString().slice(0,10);
+    // [V4.128] baseDateStr、priceTimeTag 相關變數已隨 getRollingGain 移至全域，此處移除
 
-    // 計算每個標的近365天的已實現損益
-    function getRollingGain(sym) {
-        return rawTrades
-            .filter(t => {
-                if (t.sym !== sym) return false;
-                const cd = t.closeDate || '';
-                if (!cd) return false;
-                const parts = cd.split('/');
-                if (parts.length === 3) {
-                    const iso = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
-                    return iso >= baseDateStr;
-                }
-                return cd >= baseDateStr;
-            })
-            .reduce((sum, t) => sum + (t.gain || 0), 0);
-    }
 
     // [V4.67] getActiveDays / getActiveGain 已提升為全域函數，render() 直接使用
 
@@ -3506,7 +3940,11 @@ function render() {
         // [V4.110] 呆滯料預警閾值：30天→60天
         // 原因：30天太靈敏，一般持股稍有橫盤就觸發，使用者反映干擾多
         // 影響範圍：isStale 判斷、列變黃、⚠呆滯標籤
-        const isStale = s.days > 60 && up_ !== null && up_ >= -2 && up_ <= 2;
+        // [V4.115] Bug 修正：原用 s.days（累計佔用天數），應改用現役天數
+        // 原因：s.days 可能幾千天（歷史多次結單累積），但這輪才持有幾天，用錯變數導致誤判呆滯料
+        // 修正：改用 getActiveDays() 取得本輪現役天數
+        const _activeDaysForStale = getActiveDays(item.Symbol);
+        const isStale = _activeDaysForStale > 60 && up_ !== null && up_ >= -2 && up_ <= 2;
 
         // 每欄的 cell 內容
         const cellMap = {
@@ -3578,7 +4016,25 @@ function render() {
                     </select>
                 </td>`;
             })(),
-            // [V4.104] 解套目標價 = 均成本（不賠錢的底線）
+            // [V4.118] 持倉態度欄：選完即存 posAttitudes
+            attitude: (() => {
+                const at = posAttitudes[item.Symbol] || '';
+                const atOpts = [
+                    { v:'',        l:'— 未設定 —', color:'#9ca3af' },
+                    { v:'active',  l:'🔼 積極佈局', color:'#16a34a' },
+                    { v:'neutral', l:'👁 中性觀察', color:'#2563eb' },
+                    { v:'exit',    l:'🔄 等待換線', color:'#d97706' },
+                ];
+                const curAt = atOpts.find(o=>o.v===at) || atOpts[0];
+                const atOptHtml = atOpts.map(o=>`<option value="${o.v}"${o.v===at?' selected':''}>${o.l}</option>`).join('');
+                return `<td style="padding:4px 6px">
+                    <select style="font-size:.72rem;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;
+                        color:${curAt.color};font-weight:600;background:white;cursor:pointer"
+                        onchange="saveAttitude('${item.Symbol}', this.value)">
+                        ${atOptHtml}
+                    </select>
+                </td>`;
+            })(),
             breakeven: (() => {
                 const dist = p !== undefined ? ((co - p) / p * 100) : null;
                 const cls = dist !== null ? (dist <= 0 ? 'pos' : 'neg') : '';
@@ -3643,13 +4099,20 @@ function render() {
 
                 } else if (posT === 'satellite') {
                     // 衛星：可分批減碼 / 觀察換線 / 攤平中 / 產線運行中
+                    // [V4.118] 持倉態度接入：積極佈局時 52W低點顯示攤平中而非觀察換線
+                    const att_ = posAttitudes[item.Symbol] || '';
                     let pt = (ur_ !== null && ur_ > 0 && w52) ? w52.high52 * 0.98 : co * 1.05;
                     if (p >= pt) {
                         text = '🎯 可分批減碼';
                         color = 'var(--green)'; bg = 'var(--green-l)';
                     } else if (w52 && p < w52.high52 * 0.75) {
-                        text = '🔄 觀察換線';
-                        color = '#d97706'; bg = '#fffbeb';
+                        if (att_ === 'active') {
+                            text = '⬇️ 攤平中';
+                            color = 'var(--red)'; bg = 'var(--red-l)';
+                        } else {
+                            text = '🔄 觀察換線';
+                            color = '#d97706'; bg = '#fffbeb';
+                        }
                     } else if (p < co) {
                         text = '⬇️ 攤平中';
                         color = 'var(--red)'; bg = 'var(--red-l)';
@@ -3689,7 +4152,8 @@ function render() {
             })(),
         };
         const rowClass = isStopAlert ? 'stop-alert' : isStale ? 'stale-alert' : '';
-        const mainRow = `<tr${rowClass?' class="'+rowClass+'"':''}>${colOrder.map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
+        // [V4.121] 跳過已隱藏的欄位
+        const mainRow = `<tr${rowClass?' class="'+rowClass+'"':''}>${colOrder.filter(k=>!hiddenCols.has(k)).map(k=>cellMap[k]||'<td></td>').join('')}</tr>`;
 
         // 備忘錄展開列
         const noteRowId = `note-row-${item.Symbol}`;
@@ -3708,6 +4172,7 @@ function render() {
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <!-- [V4.113] 三列垂直排版，手機版 flex-wrap 自動換行 -->
                     <!-- 原邏輯：display:grid;grid-template-columns:1fr 1fr 1fr auto（一列橫排） -->
+                    <!-- [V4.125] 移除備忘錄持倉態度下拉（死路，從未接通 posAttitudes，改由表格欄統一設定） -->
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                         <div style="font-size:.72rem;color:var(--text2);font-weight:600;width:130px;flex-shrink:0">🎯 獲利目標價（系統計算）</div>
                         <div style="padding:5px 10px;background:var(--blue-l);border-radius:6px;font-size:.78rem;color:var(--blue);font-weight:600;flex:1;min-width:180px">${profitTargetInfo}</div>
@@ -3885,16 +4350,17 @@ function toggleNote(sym) {
 }
 
 function saveNote(sym) {
-    const target     = document.getElementById(`note-target-${sym}`)?.value.trim() || '';
-    const entryReason= document.getElementById(`note-entry-${sym}`)?.value.trim()  || '';
-    const stopLoss   = document.getElementById(`note-stop-${sym}`)?.value.trim()   || '';
+    // [V4.125] 移除 attitude 欄位（備忘錄態度下拉已廢棄，改由表格欄 posAttitudes 統一管理）
+    // 原邏輯：存 target, entryReason, stopLoss, attitude
+    const target      = document.getElementById(`note-target-${sym}`)?.value.trim() || '';
+    const entryReason = document.getElementById(`note-entry-${sym}`)?.value.trim()  || '';
+    const stopLoss    = document.getElementById(`note-stop-${sym}`)?.value.trim()   || '';
     if (target || entryReason || stopLoss) {
         notes[sym] = { target, entryReason, stopLoss };
     } else {
         delete notes[sym];
     }
     saveCurrentUser();
-    // 更新 Symbol 欄的備忘錄圖示（不重繪整個表格）
     const symCell = document.querySelector(`td.col-frozen span.sym-cell`);
     render();
 }
@@ -3902,6 +4368,7 @@ function saveNote(sym) {
 function clearNoteField(sym, field) {
     if (!notes[sym]) return;
     notes[sym][field] = '';
+    // [V4.125] 移除 attitude 欄位（備忘錄態度下拉已廢棄）
     const elMap = { target:`note-target-${sym}`, entryReason:`note-entry-${sym}`, stopLoss:`note-stop-${sym}` };
     const el = document.getElementById(elMap[field]);
     if (el) el.value = '';
@@ -3917,6 +4384,473 @@ function clearNoteField(sym, field) {
 // [V4.110] 持倉性質儲存函數
 // 原因：posType 下拉選單 onchange 呼叫此函數，即選即存、不需重繪整個表格
 // 影響範圍：posTypes 物件、localStorage、持倉性質欄顏色即時更新
+
+// ══════════════════════════════════════════════════════════════════
+//  [V4.114] 產線分析功能
+//  原因：讓系統能即時產出結構化分析報告，整合五層判斷框架
+//  影響範圍：openAnalysisModal / addAnalysisSymRow / runAnalysis /
+//            buildAnalysisReport / copyAnalysis / downloadAnalysis
+// ══════════════════════════════════════════════════════════════════
+
+function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+function openAnalysisModal() {
+    if (!inventory.length) { alert('尚無持倉資料，請先匯入持股。'); return; }
+    document.getElementById('analysisNewCash').value = '';
+    // [V4.116] 重置剩餘可分配金額顯示
+    const remainEl = document.getElementById('analysisRemainCash');
+    if (remainEl) { remainEl.textContent = '$0'; remainEl.style.color = 'var(--blue)'; }
+    document.getElementById('analysisNewSymbolRows').innerHTML = `
+        <div class="analysis-sym-row" style="display:grid;grid-template-columns:100px 120px 1fr 32px;gap:6px;margin-bottom:6px">
+            <input class="input input-sm" placeholder="Symbol" style="font-size:.78rem">
+            <select class="input input-sm" style="font-size:.78rem">
+                <option value="satellite">🛰 衛星</option>
+                <option value="core">🏛 核心</option>
+                <option value="turnover">🔄 週轉</option>
+            </select>
+            <input class="input input-sm" type="number" placeholder="投入金額 $" style="font-size:.78rem" oninput="updateRemainCash()">
+            <button class="btn btn-outline btn-sm" onclick="this.closest('.analysis-sym-row').remove();updateRemainCash()" style="padding:0 8px">✕</button>
+        </div>`;
+    document.getElementById('analysisInputModal').style.display = 'flex';
+}
+
+function addAnalysisSymRow() {
+    const row = document.createElement('div');
+    row.className = 'analysis-sym-row';
+    row.style.cssText = 'display:grid;grid-template-columns:100px 120px 1fr 32px;gap:6px;margin-bottom:6px';
+    row.innerHTML = `
+        <input class="input input-sm" placeholder="Symbol" style="font-size:.78rem">
+        <select class="input input-sm" style="font-size:.78rem">
+            <option value="satellite">🛰 衛星</option>
+            <option value="core">🏛 核心</option>
+            <option value="turnover">🔄 週轉</option>
+        </select>
+        <input class="input input-sm" type="number" placeholder="投入金額 $" style="font-size:.78rem" oninput="updateRemainCash()">
+        <button class="btn btn-outline btn-sm" onclick="this.closest('.analysis-sym-row').remove();updateRemainCash()" style="padding:0 8px">✕</button>`;
+    document.getElementById('analysisNewSymbolRows').appendChild(row);
+}
+
+// [V4.116] 即時計算剩餘可分配金額 = 新入資金 - 已規劃給新標的的金額
+// 原因：新標的是從新入資金撥入，不是另一筆錢
+function updateRemainCash() {
+    const newCash = parseFloat(document.getElementById('analysisNewCash').value) || 0;
+    let allocated = 0;
+    document.querySelectorAll('.analysis-sym-row').forEach(row => {
+        const amtInput = row.querySelectorAll('input')[1];
+        allocated += parseFloat(amtInput?.value) || 0;
+    });
+    const remain = newCash - allocated;
+    const el = document.getElementById('analysisRemainCash');
+    if (el) {
+        el.textContent = fmtUSD(Math.max(0, remain));
+        el.style.color = remain < 0 ? '#dc2626' : 'var(--blue)';
+    }
+}
+
+function runAnalysis() {
+    // 讀取新入資金
+    const newCash = parseFloat(document.getElementById('analysisNewCash').value) || 0;
+    // 讀取新標的
+    const newSymbols = [];
+    document.querySelectorAll('.analysis-sym-row').forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        const select = row.querySelector('select');
+        const sym = inputs[0].value.trim().toUpperCase();
+        const amt = parseFloat(inputs[1].value) || 0;
+        const type = select.value;
+        if (sym && amt > 0) newSymbols.push({ sym, type, amt });
+    });
+    closeModal('analysisInputModal');
+    const report = buildAnalysisReport(newCash, newSymbols);
+    document.getElementById('analysisResultTitle').textContent =
+        `📖 ${activeUser} 帳戶 產線分析報告 · ${new Date().toLocaleDateString('zh-TW')}`;
+    document.getElementById('analysisResultBody').innerHTML = report.html;
+    window._analysisText = report.text;
+    document.getElementById('analysisResultModal').style.display = 'flex';
+}
+
+function buildAnalysisReport(newCash, newSymbols) {
+    const ptLabel = { core:'核心', satellite:'衛星', turnover:'週轉', '':'未設定' };
+    const ptEmoji = { core:'🏛', satellite:'🛰', turnover:'🔄', '':'—' };
+
+    const totalMV = inventory.reduce((s,it) => {
+        const p = prices[it.Symbol]; return p ? s + p * parseFloat(it.Shares) : s; }, 0);
+    const totalCash = currentCash;
+    const totalAssets = totalMV + totalCash;
+
+    const mvByType = { core:0, satellite:0, turnover:0, '':0 };
+    const symsByType = { core:[], satellite:[], turnover:[], '':[] };
+    inventory.forEach(it => {
+        const p = prices[it.Symbol]; if (!p) return;
+        const t = posTypes[it.Symbol] || '';
+        mvByType[t] += p * parseFloat(it.Shares);
+        symsByType[t].push(it.Symbol);
+    });
+
+    const simMV = { ...mvByType };
+    newSymbols.forEach(ns => { simMV[ns.type] = (simMV[ns.type]||0) + ns.amt; });
+    // [V4.116] 修正：新標的是從新入資金撥入，模擬總資產 = 原總資產 + 新入資金
+    // 原邏輯：totalMV + newCash + newSymbols 金額加總（新標的被重複計入）
+    const simTotal = totalMV + newCash;
+
+    const tgt = { core: posTypeTargets?.core??50, satellite: posTypeTargets?.satellite??40, turnover: posTypeTargets?.turnover??10 };
+
+    const grandGain = Object.values(stats).reduce((s,v)=>s+v.gain,0);
+    const grandDays = Object.values(stats).reduce((s,v)=>s+v.days,0);
+    const avgOutput = grandDays > 0 ? grandGain / grandDays : 0;
+    const totalUR = inventory.reduce((s,it) => {
+        const p = prices[it.Symbol]; if (!p) return s;
+        return s + (p - parseFloat(it.Cost)) * parseFloat(it.Shares); }, 0);
+
+    const corePct = totalMV > 0 ? mvByType.core / totalMV * 100 : 0;
+    const coreOverflow = corePct - tgt.core;
+
+    const coreItems = inventory.filter(it => (posTypes[it.Symbol]||'') === 'core' && prices[it.Symbol]);
+    coreItems.sort((a,b) => {
+        const wa = weekData[a.Symbol]; const wb = weekData[b.Symbol];
+        const pa = prices[a.Symbol]; const pb = prices[b.Symbol];
+        const posA = wa ? (pa - wa.low52)/(wa.high52 - wa.low52)*100 : 0;
+        const posB = wb ? (pb - wb.low52)/(wb.high52 - wb.low52)*100 : 0;
+        return posB - posA;
+    });
+
+    const totalRolling = inventory.reduce((s,it) => {
+        const st = stats[it.Symbol]; return s + (st?.rolling365||0); }, 0);
+    const satItems = inventory.filter(it => (posTypes[it.Symbol]||'') === 'satellite' && prices[it.Symbol]);
+    const satEfficiency = satItems.map(it => {
+        const p = prices[it.Symbol];
+        const mv = p * parseFloat(it.Shares);
+        const co = parseFloat(it.Cost);
+        const st = stats[it.Symbol] || {};
+        const contribution = totalRolling > 0 ? (st.rolling365||0)/totalRolling*100 : 0;
+        const holdingPct = totalMV > 0 ? mv/totalMV*100 : 0;
+        const w52 = weekData[it.Symbol];
+        const pos52 = w52 ? (p-w52.low52)/(w52.high52-w52.low52)*100 : null;
+        const urPct = (p-co)/co*100;
+        // [V4.115] 改用 getActiveDays() 取代 st.days（累計佔用天數）
+        // 原因：st.days 是歷史結單天數加總，從未賣出的標的為 0，導致分析引擎誤判
+        const holdDays = getActiveDays(it.Symbol);
+        return { sym:it.Symbol, mv, co, p, contribution, holdingPct, pos52, urPct, holdDays,
+            rolling: st.rolling365||0, decision: getDecisionLabel(it) };
+    });
+
+    const sellCandidates = [];
+    if (coreOverflow > 0) {
+        coreItems.slice(0,2).forEach(it => {
+            const p = prices[it.Symbol];
+            const mv = p * parseFloat(it.Shares);
+            const co = parseFloat(it.Cost);
+            const urPct = (p-co)/co*100;
+            const w52 = weekData[it.Symbol];
+            const pos52 = w52 ? (p-w52.low52)/(w52.high52-w52.low52)*100 : null;
+            sellCandidates.push({ sym:it.Symbol, type:'核心', action:'分批減碼',
+                mv, urPct, pos52, reason:'核心超配 '+coreOverflow.toFixed(1)+'%，52W位置 '+(pos52?pos52.toFixed(0):'—')+'%，浮盈 '+urPct.toFixed(1)+'%' });
+        });
+    }
+    // [V4.115] 修正：holdDays 現在用 getActiveDays()，從未賣出標的也有值
+    // 天數門檻改為：holdDays > 30 才需要門檻（避免剛進場就建議換線）
+    // holdDays = 0 代表 txnData 也沒有買入紀錄，此時只看 52W 位置判斷
+    // [V4.118] 天數門檻統一 60 交易日（與呆滯料、製程優化一致）
+    satEfficiency.filter(s => s.decision.includes('觀察換線') && (s.holdDays > 60 || s.holdDays === 0)).forEach(s => {
+        sellCandidates.push({ sym:s.sym, type:'衛星', action:'評估換線',
+            mv:s.mv, urPct:s.urPct, pos52:s.pos52,
+            reason:'持倉 '+(s.holdDays||'—')+' 天，52W位置 '+(s.pos52?s.pos52.toFixed(0):'—')+'%，浮損 '+s.urPct.toFixed(1)+'%，觀察換線訊號成立' });
+    });
+
+    // [V4.115] 新增：週轉超配建議減碼
+    // 原因：原邏輯只處理核心超配，週轉超配沒有賣出候選
+    const turnoverPctNow = totalMV > 0 ? mvByType.turnover/totalMV*100 : 0;
+    if (turnoverPctNow > (tgt.turnover ?? 10) + 2) {
+        const turnItems = inventory
+            .filter(it => (posTypes[it.Symbol]||'') === 'turnover' && prices[it.Symbol])
+            .map(it => {
+                const p = prices[it.Symbol];
+                const co = parseFloat(it.Cost);
+                const mv = p * parseFloat(it.Shares);
+                const urPct = (p-co)/co*100;
+                const w52 = weekData[it.Symbol];
+                const pos52 = w52 ? (p-w52.low52)/(w52.high52-w52.low52)*100 : null;
+                return { sym:it.Symbol, mv, urPct, pos52 };
+            })
+            .sort((a,b) => b.urPct - a.urPct); // 浮盈最高的優先
+        turnItems.slice(0,2).forEach(it => {
+            sellCandidates.push({ sym:it.sym, type:'週轉', action:'提撥減碼',
+                mv:it.mv, urPct:it.urPct, pos52:it.pos52,
+                reason:'週轉超配 '+(turnoverPctNow-tgt.turnover).toFixed(1)+'%（實際 '+turnoverPctNow.toFixed(1)+'% > 目標 '+(tgt.turnover??10)+'%），浮盈 '+it.urPct.toFixed(1)+'%' });
+        });
+    }
+
+    const buyCandidates = [];
+    satEfficiency.filter(s => s.contribution > s.holdingPct && s.contribution > 0).sort((a,b)=>b.contribution-a.contribution).slice(0,3).forEach(s => {
+        buyCandidates.push({ sym:s.sym, type:'衛星', action:'加碼/攤平',
+            reason:'高效低配：產值貢獻 '+s.contribution.toFixed(1)+'% > 持股占比 '+s.holdingPct.toFixed(1)+'%' });
+    });
+    satEfficiency.filter(s => s.urPct < 0 && s.decision.includes('攤平')).forEach(s => {
+        if (!buyCandidates.find(b=>b.sym===s.sym))
+            buyCandidates.push({ sym:s.sym, type:'衛星', action:'攤平中',
+                reason:'均成本 $'+s.co.toFixed(2)+'，現價 $'+s.p.toFixed(2)+'，浮損 '+s.urPct.toFixed(1)+'%' });
+    });
+    const turnoverPct = totalMV > 0 ? mvByType.turnover/totalMV*100 : 0;
+    if (turnoverPct < tgt.turnover - 2) {
+        const turnItems = inventory.filter(it => (posTypes[it.Symbol]||'') === 'turnover' && prices[it.Symbol]);
+        turnItems.forEach(it => {
+            buyCandidates.push({ sym:it.Symbol, type:'週轉', action:'補強週轉',
+                reason:'週轉占比 '+turnoverPct.toFixed(1)+'% 低於目標 '+tgt.turnover+'%' });
+        });
+    }
+
+    const typeOrder = ['core','satellite','turnover'];
+    const today = new Date().toLocaleDateString('zh-TW');
+    let html = '', text = '';
+
+    const section = (title) => {
+        text += '\n' + '═'.repeat(50) + '\n' + title + '\n' + '═'.repeat(50) + '\n';
+        return '<div style="margin-bottom:20px"><div style="font-weight:700;font-size:.85rem;color:var(--blue);border-bottom:2px solid var(--blue);padding-bottom:4px;margin-bottom:10px">' + title + '</div>';
+    };
+    const endSection = () => '</div>';
+    const tbl = (headers, rows, colStyles) => {
+        let t = '<table style="width:100%;border-collapse:collapse;font-size:.78rem;margin-bottom:8px"><thead><tr>' +
+            headers.map(h=>'<th style="text-align:left;padding:5px 8px;background:#f8fafc;border:1px solid var(--border);font-weight:600;white-space:nowrap">'+h+'</th>').join('') +
+            '</tr></thead><tbody>';
+        rows.forEach(row => {
+            t += '<tr>' + row.map((cell,i)=>'<td style="padding:5px 8px;border:1px solid var(--border);'+(colStyles?.[i]||'')+'">'+cell+'</td>').join('') + '</tr>';
+        });
+        t += '</tbody></table>';
+        return t;
+    };
+    const badge = (txt, color) => '<span style="font-size:.7rem;font-weight:600;color:'+color+';background:'+color+'22;padding:1px 6px;border-radius:4px;white-space:nowrap">'+txt+'</span>';
+
+    // 區塊1：產線總體健康
+    html += section('一、產線總體健康');
+    html += '<p style="margin:0 0 8px">總資產 <strong>'+fmtUSD(totalAssets)+'</strong>，持股市值 <strong>'+fmtUSD(totalMV)+'</strong>，' +
+        '未實現損益 '+badge((totalUR>=0?'+':'')+fmtUSD(totalUR), totalUR>=0?'#16a34a':'#dc2626')+'，' +
+        '已實現損益 '+badge(fmtUSD(grandGain),'#2563eb')+'。</p>';
+    html += '<p style="margin:0 0 8px">平均日均產值 <strong>'+fmtUSD(avgOutput)+'</strong>。</p>';
+    text += '\n【一、產線總體健康】\n總資產：'+fmtUSD(totalAssets)+'  持股市值：'+fmtUSD(totalMV)+'\n未實現：'+fmtUSD(totalUR)+'  已實現：'+fmtUSD(grandGain)+'\n日均產值：'+fmtUSD(avgOutput)+'\n';
+    html += endSection();
+
+    // 區塊2：分類占比對比
+    html += section('二、分類占比狀況（操作前 → 模擬後）');
+    const hasNewInput = newCash > 0 || newSymbols.length > 0;
+    const allTypes = [...typeOrder, ''];
+    const pctRows = allTypes.map(t => {
+        const before = totalMV > 0 ? mvByType[t]/totalMV*100 : 0;
+        const after = simTotal > 0 ? simMV[t]/simTotal*100 : 0;
+        const target = tgt[t] ?? null;
+        const diff = after - (target??after);
+        const statusAfter = target===null ? '—' : Math.abs(diff) < 2 ? badge('✅ 達標','#16a34a') : diff > 0 ? badge('⚠️ 超配','#d97706') : badge('🔵 不足','#2563eb');
+        const arrowColor = Math.abs(after-before) < 0.5 ? '#6b7280' : after > before ? '#dc2626' : '#16a34a';
+        const beforeStr = before.toFixed(1)+'%';
+        const afterStr = hasNewInput ? '<span style="color:'+arrowColor+';font-weight:600">'+after.toFixed(1)+'%</span>' : '—';
+        const targetStr = target !== null ? target+'%' : '—';
+        text += (ptLabel[t]||'未設定')+'：'+beforeStr+(hasNewInput?' → '+after.toFixed(1)+'%':'')+' (目標:'+targetStr+')\n';
+        return [ptEmoji[t]+' '+(ptLabel[t]||'未設定'), fmtUSD(mvByType[t]), beforeStr, hasNewInput ? afterStr : '—', targetStr, statusAfter];
+    });
+    html += tbl(['分類','市值','現在占比','模擬後占比','目標','狀態'], pctRows);
+    if (hasNewInput) {
+        html += '<div style="font-size:.72rem;color:var(--text2);margin-top:4px">模擬已納入：新入資金 '+fmtUSD(newCash)+(newSymbols.length?'、新標的 '+newSymbols.map(s=>s.sym+'('+fmtUSD(s.amt)+')').join(' '):'')+'。</div>';
+        text += '模擬納入：新入資金 '+fmtUSD(newCash)+'，新標的 '+newSymbols.map(s=>s.sym).join(', ')+'\n';
+    }
+    html += endSection();
+
+    // 區塊3：可執行動作
+    html += section('三、今日可執行動作（兩層為獨立建議，可單獨執行）');
+
+    // [V4.118-C] 第三區塊改版：釋出→可調度資金→去向一氣呵成，拿掉原第四區塊
+    // 天數門檻統一 60 交易日；持倉態度 posAttitudes 接入第二層判斷
+
+    // ── 可調度資金計算 ──
+    const allocatedToNewSyms = newSymbols.reduce((s,ns)=>s+ns.amt,0);
+    const remainNewCash = Math.max(0, newCash - allocatedToNewSyms);
+    const overweightFunds = ['core','satellite','turnover'].reduce((s, t) => {
+        const actual = totalMV > 0 ? mvByType[t]/totalMV*100 : 0;
+        const target = tgt[t] ?? 0;
+        if (actual > target) return s + (actual - target)/100 * totalMV;
+        return s;
+    }, 0);
+    const totalFunds = overweightFunds + remainNewCash;
+    const fundsSrcParts = [];
+    ['core','satellite','turnover'].forEach(t => {
+        const actual = totalMV > 0 ? mvByType[t]/totalMV*100 : 0;
+        const target = tgt[t] ?? 0;
+        const label = {core:'核心',satellite:'衛星',turnover:'週轉'}[t];
+        if (actual > target) fundsSrcParts.push(label+'超配 '+fmtUSD((actual-target)/100*totalMV));
+    });
+    if (remainNewCash > 0) fundsSrcParts.push('新入資金剩餘 '+fmtUSD(remainNewCash));
+
+    // ── 第一層：比例校正（風險控管）──
+    html += '<div style="font-weight:600;font-size:.82rem;color:#dc2626;margin-bottom:6px">💰 第一層：比例校正（風險控管）</div>';
+    html += '<div style="font-size:.72rem;color:var(--text2);margin-bottom:8px;font-style:italic">獨立建議，可單獨執行</div>';
+
+    if (sellCandidates.length) {
+        html += '<div style="font-size:.75rem;font-weight:600;margin-bottom:4px">釋出來源</div>';
+        const sellRows = sellCandidates.map(s => [
+            '<strong>'+s.sym+'</strong>',
+            badge(s.type, s.type==='核心'?'#2563eb':s.type==='衛星'?'#7c3aed':'#d97706'),
+            badge(s.action,'#dc2626'), fmtUSD(s.mv),
+            (s.urPct>=0?'+':'')+s.urPct.toFixed(1)+'%',
+            s.pos52 ? s.pos52.toFixed(0)+'%' : '—', s.reason
+        ]);
+        html += tbl(['標的','性質','建議','市值','浮損益','52W位置','判斷依據'], sellRows);
+        text += '\n【第一層 - 釋出來源】\n';
+        sellCandidates.forEach(s => { text += s.sym+' ('+s.type+') - '+s.action+'：'+s.reason+'\n'; });
+    } else {
+        html += '<p style="color:var(--text2);font-size:.78rem;margin-bottom:6px">目前無比例超配，無需釋出。</p>';
+        text += '\n【第一層 - 釋出來源】：無超配\n';
+    }
+
+    html += '<div style="padding:8px 12px;background:#f0fdf4;border-radius:6px;margin:8px 0;font-size:.78rem">';
+    html += '<span style="font-weight:600">可調度資金：</span><strong style="color:#16a34a">'+fmtUSD(totalFunds)+'</strong>';
+    if (fundsSrcParts.length) html += '<span style="color:var(--text2);margin-left:8px">（'+fundsSrcParts.join('、')+'）</span>';
+    html += '</div>';
+    text += '可調度資金：'+fmtUSD(totalFunds)+'（'+(fundsSrcParts.join('、')||'—')+'）\n';
+
+    if (buyCandidates.length) {
+        html += '<div style="font-size:.75rem;font-weight:600;margin-bottom:4px;margin-top:6px">資金去向</div>';
+        const buyRows = buyCandidates.map(b => [
+            '<strong>'+b.sym+'</strong>',
+            badge(b.type, b.type==='核心'?'#2563eb':b.type==='衛星'?'#7c3aed':'#d97706'),
+            badge(b.action,'#16a34a'), b.reason
+        ]);
+        html += tbl(['標的','性質','建議','判斷依據'], buyRows, ['','','','max-width:280px']);
+        text += '【第一層 - 資金去向】\n';
+        buyCandidates.forEach(b => { text += b.sym+' ('+b.type+') - '+b.action+'：'+b.reason+'\n'; });
+    } else {
+        html += '<p style="color:var(--text2);font-size:.78rem;margin-top:6px">目前無明確加碼目標，資金可先保留。</p>';
+        text += '【第一層 - 資金去向】：無明確加碼目標\n';
+    }
+
+    // ── 第二層：製程優化（利潤來源）──
+    html += '<div style="border-top:1px solid var(--border);margin:14px 0 10px"></div>';
+    html += '<div style="font-weight:600;font-size:.82rem;color:#7c3aed;margin-bottom:6px">🔬 第二層：製程優化（利潤來源）</div>';
+    html += '<div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-style:italic">獨立於第一層，可單獨執行</div>'; html += '<div style="font-size:.71rem;color:var(--text3);margin-bottom:8px">📌 衛星內貢獻% 分母為衛星分類滾動產值加總，與主畫面產值貢獻%（全帳戶）不同</div>';
+
+    // 低效高配：貢獻% < 占比% - 5% 且現役 > 60，或貢獻=0 且現役 > 60
+    // 排除：積極佈局（態度 active）
+    const lowEffItems = satEfficiency.filter(s => {
+        const att = posAttitudes[s.sym] || '';
+        if (att === 'active') return false;
+        return (s.contribution === 0 && s.holdDays > 60) ||
+               (s.contribution < s.holdingPct - 5 && s.holdDays > 60);
+    });
+    if (lowEffItems.length) {
+        html += '<div style="font-size:.75rem;font-weight:600;color:#d97706;margin-bottom:4px">效率偏低，考慮換線</div>';
+        const lowRows = lowEffItems.map(s => {
+            const att = posAttitudes[s.sym] || '';
+            const pri = att === 'exit' ? badge('優先換線','#dc2626') : badge('評估換線','#d97706');
+            return ['<strong>'+s.sym+'</strong>', pri, s.holdDays+'天',
+                s.contribution.toFixed(1)+'%', s.holdingPct.toFixed(1)+'%',
+                s.contribution===0?'長期零產值':'低效高配'];
+        });
+        html += tbl(['標的','建議','現役天數','衛星內貢獻%','持股占比%','原因'], lowRows);
+        text += '【第二層 - 效率偏低換線候選】\n';
+        lowEffItems.forEach(s => { text += s.sym+'：貢獻'+s.contribution.toFixed(1)+'% 占比'+s.holdingPct.toFixed(1)+'% '+s.holdDays+'天\n'; });
+    }
+
+    // 高效低配：貢獻% > 占比% + 5%，排除等待換線（態度 exit）
+    const highEffItems = satEfficiency.filter(s => {
+        const att = posAttitudes[s.sym] || '';
+        if (att === 'exit') return false;
+        return s.contribution > s.holdingPct + 5 && s.contribution > 0;
+    }).sort((a,b) => b.contribution - a.contribution).slice(0,3);
+    if (highEffItems.length) {
+        html += '<div style="font-size:.75rem;font-weight:600;color:#16a34a;margin:'+(lowEffItems.length?'8px':'0')+'px 0 4px">效率偏高，建議加碼</div>';
+        const highRows = highEffItems.map(s => {
+            const att = posAttitudes[s.sym] || '';
+            const str = att === 'active' ? badge('強烈建議加碼','#16a34a') : badge('建議加碼','#16a34a');
+            return ['<strong>'+s.sym+'</strong>', str,
+                s.contribution.toFixed(1)+'%', s.holdingPct.toFixed(1)+'%',
+                '高效低配'+(att==='active'?' + 積極佈局':'')];
+        });
+        html += tbl(['標的','建議','衛星內貢獻%','持股占比%','原因'], highRows);
+        text += '【第二層 - 效率偏高加碼候選】\n';
+        highEffItems.forEach(s => { text += s.sym+'：貢獻'+s.contribution.toFixed(1)+'% 占比'+s.holdingPct.toFixed(1)+'%\n'; });
+    }
+
+    // 新進場觀察中
+    const newEntryItems = satEfficiency.filter(s => s.contribution === 0 && s.holdDays <= 60 && s.holdDays > 0);
+    if (newEntryItems.length) {
+        html += '<div style="font-size:.75rem;color:var(--text2);margin-top:8px">⚪ 新進場觀察中（不建議動）：'+newEntryItems.map(s=>s.sym+'（'+s.holdDays+'天）').join('、')+'</div>';
+        text += '【第二層 - 觀察中】：'+newEntryItems.map(s=>s.sym).join('、')+'\n';
+    }
+
+    if (!lowEffItems.length && !highEffItems.length) {
+        html += '<p style="color:var(--text2);font-size:.78rem">目前衛星效率分布正常，無製程優化建議。</p>';
+        text += '【第二層】：衛星效率正常\n';
+    }
+    html += endSection();
+
+        // 區塊6：新機台模擬
+    if (newSymbols.length > 0) {
+        html += section('四、新機台上線模擬');
+        const newSymRows = newSymbols.map(ns => [
+            '<strong>'+ns.sym+'</strong>', badge(ptLabel[ns.type]||'未設定', ns.type==='core'?'#2563eb':ns.type==='satellite'?'#7c3aed':'#d97706'),
+            fmtUSD(ns.amt), simTotal>0?(ns.amt/simTotal*100).toFixed(1)+'%':'—',
+            badge('新機台，效率待觀察','#6b7280')
+        ]);
+        html += tbl(['標的','分類','投入金額','預計占比','備註'], newSymRows);
+        text += '\n【新機台上線模擬】\n';
+        newSymbols.forEach(ns => { text += ns.sym+'（'+(ptLabel[ns.type]||'未設定')+'）：'+fmtUSD(ns.amt)+'\n'; });
+        html += endSection();
+    }
+
+    // 結語
+    html += '<div style="margin-top:16px;padding:10px 14px;background:#f8fafc;border-radius:6px;font-size:.75rem;color:var(--text2);border-left:3px solid var(--blue)">以上分析基於 <strong>'+today+'</strong> 持倉資料。新機台進場後故事將重新改寫。最終決策由人執行。</div>';
+    text += '\n以上分析基於 '+today+' 持倉資料。新機台進場後故事將重新改寫。最終決策由人執行。\n';
+
+    return { html, text };
+}
+
+function getDecisionLabel(item) {
+    const p = prices[item.Symbol];
+    if (!p) return '—';
+    const co = parseFloat(item.Cost);
+    const sh = parseFloat(item.Shares);
+    const mv = p * sh;
+    const cb = co * sh;
+    const ur = mv - cb;
+    const w52 = weekData[item.Symbol];
+    const posT = posTypes[item.Symbol] || '';
+    if (posT === 'core') {
+        const coreMV = inventory.reduce((s,it)=>{
+            if((posTypes[it.Symbol]||'')!=='core')return s;
+            const pp=prices[it.Symbol]; return pp?s+pp*parseFloat(it.Shares):s;},0);
+        const tMV = inventory.reduce((s,it)=>{const pp=prices[it.Symbol];return pp?s+pp*parseFloat(it.Shares):s;},0);
+        return (tMV>0&&coreMV/tMV*100>(posTypeTargets?.core??50)) ? '超配：建議減碼' : '核心持倉：長期續抱';
+    }
+    if (posT === 'satellite') {
+        const att = posAttitudes[item.Symbol] || '';
+        const pt = (ur>0&&w52) ? w52.high52*0.98 : co*1.05;
+        if (p>=pt) return '可分批減碼';
+        // [V4.118] 持倉態度接入：積極佈局時 52W低點顯示攤平中而非觀察換線
+        if (w52&&p<w52.high52*0.75) return att==='active' ? '攤平中' : '觀察換線';
+        if (p<co) return '攤平中';
+        return '產線運行中';
+    }
+    if (posT === 'turnover') return p>co ? '有獲利可提撥' : '等回平盤';
+    const pt = (ur>0&&w52) ? w52.high52*0.98 : co*1.05;
+    if (p>=pt) return '達到目標：建議減碼';
+    if (w52&&p<w52.high52*0.75) return '52W下修警訊：評估出場';
+    if (p<co) return '低於成本：不賠錢續抱';
+    return '產線運行中：續等';
+}
+
+function copyAnalysis() {
+    if (!window._analysisText) return;
+    navigator.clipboard.writeText(window._analysisText).then(()=>alert('✅ 已複製到剪貼簿')).catch(()=>alert('複製失敗，請手動選取文字'));
+}
+
+function downloadAnalysis() {
+    if (!window._analysisText) return;
+    const blob = new Blob([window._analysisText], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `產線分析_${activeUser}_${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+}
+
 function savePosType(sym, val) {
     if (val) {
         posTypes[sym] = val;
@@ -3927,6 +4861,18 @@ function savePosType(sym, val) {
     // [V4.110] 拿掉 render()，改由使用者按「更新操作建議」按鈕統一重繪
     // 原因：逐一改持倉性質時每次重繪體驗卡頓，且焦點消失
     // 影響範圍：持倉比例面板加「🔄 更新操作建議」按鈕
+}
+
+// [V4.118] 儲存持倉態度
+// 原因：從 notes.attitude 獨立出來，與 savePosType 同層級管理
+// 影響範圍：posAttitudes、備份/還原、clearDataVariables、報表、分析引擎
+function saveAttitude(sym, val) {
+    if (val) {
+        posAttitudes[sym] = val;
+    } else {
+        delete posAttitudes[sym];
+    }
+    saveCurrentUser();
 }
 
 // [V4.110] 儲存持倉比例目標設定
@@ -4995,6 +5941,59 @@ function setKPI(id,val,cls) {
 // ══════════════════════════════════════════════════════
 // [V4.106] 改為 JS 物件管理，buildChangelog() 自動產生 HTML，不再手動維護 HTML 區塊
 const CHANGELOG = {
+    // [V4.128] 消除報表三個獨立副本，getRollingGain 提升全域，報表改呼叫全域函數，新增兩條 DEV_RULES
+    'V4.128': { text: '消除報表獨立副本根本問題：(1)getRollingGain 提升為全域函數 (2)刪除 getReportRollingGain/getReportActiveDays/getReportActiveGain 三個副本，報表統一呼叫全域版，修正從未賣出標的現役天數報表顯示0的問題 (3)DEV_RULES 新增【報表函數副本規範】【版本基礎規範】。', type: 'fix' },
+    // [V4.127] 修正報表與主畫面不一致：衛星路補 posAttitudes、getVal 排序補 posAttitudes、總日均產值判斷條件對齊 cellMap
+    'V4.127': { text: '修正三處報表同步問題：(1)generateReportForUser 衛星路補 posAttitudes 判斷，積極佈局+52W低點正確輸出「攤平中」 (2)getVal decision 衛星路補 posAttitudes，排序權重與顯示標籤一致 (3)總日均產值判斷條件改與 cellMap 完全一致，消除各自維護風險。', type: 'fix' },
+    // [V4.126] 整合 V4.124/125/126 三版修改：指標說明重建、備忘錄態度下拉移除、resetUIState 補 renderPosTypeDist
+    'V4.126': { text: '整合三版修改：(1)依交接清單重建 helpTab-metrics A~F 六群指標說明 (2)移除備忘錄態度下拉（死路，從未接通 posAttitudes）(3)resetUIState 補呼叫 renderPosTypeDist，修正清除後持倉分佈面板殘留舊帳戶數字。', type: 'fix' },
+    // [V4.123] 修正欄位管理 Modal 尺寸 + 備份按鈕標示修正
+    // 原因：colMgrModal 沒有 max-height 導致手機爆開；USER BAR 備份按鈕只寫「備份」誤導用戶
+    // 影響範圍：colMgrModal HTML 結構（參考 helpModal）、USER BAR 備份按鈕文字
+    'V4.123': { text: '修正欄位管理 Modal 尺寸（max-height:85vh，內容區可捲動）；USER BAR 備份按鈕文字改為「備份/還原」。', type: 'fix' },
+    // [V4.122] 欄位管理 Modal + 手機長按修正
+    // 原因：V4.121 手機 contextmenu 不觸發；需要完整的欄位管理面板
+    // 影響範圍：th touchstart/touchend、⚙️欄位按鈕、colMgrModal HTML、
+    //           openColMgrModal/renderColMgr/resetHiddenCols 函數
+    'V4.122': { text: '新增⚙️欄位管理 Modal（點擊欄位名稱切換顯示/隱藏）；修正手機長按欄位標題觸發右鍵選單（touchstart 500ms 計時）。', type: 'feature' },
+    // [V4.121] 欄位右鍵收納盒 + 隱藏數字時 disable 產線分析
+    // 原因：欄位越來越多需要收納機制；隱藏數字時分析報告會洩漏數字
+    // 影響範圍：hiddenCols STATE / clearDataVariables / renderTableHead / render / toggleHideNumbers
+    'V4.121': { text: '新增欄位右鍵選單（隱藏/顯示欄位），設定存入 localStorage；隱藏數字時 disable 產線分析按鈕。', type: 'feature' },
+    // [V4.120] 按鈕搬移 + 分析報告欄位名稱修正
+    // 更新操作建議、產線分析按鈕移至周轉表面板右上角
+    // 第二層「產值貢獻%」改名「衛星內貢獻%」並加說明（分母為衛星加總，非全帳戶）
+    'V4.120': { text: '更新操作建議與產線分析按鈕移至周轉表右上角；第二層衛星效率欄改名「衛星內貢獻%」並加分母說明。', type: 'feature' },
+    // [V4.119] 分析報告修正：移除觀察清單（廢話區塊）、標題重新編號
+    // 原因：觀察清單列出「不急」的標的毫無意義，只增加干擾
+    // 影響範圍：buildAnalysisReport 第五點移除，四→結語編號修正
+    'V4.119': { text: '移除分析報告「觀察清單」區塊（不急但要盯等於廢話）；標題重新編號：一二三四結語。', type: 'fix' },
+    // [V4.118] 持倉態度欄位重構 + 初始化修正 + 分析報告改版
+    // 原因：notes.attitude 獨立為 posAttitudes{}，與 posTypes 同層級管理；
+    //        clearDataVariables 漏掉初始化；分析報告第三點結構改版
+    // 影響範圍：STATE/clearDataVariables/save/load/COL_DEFS/cellMap/getVal/報表/說明
+    'V4.118': { text: '持倉態度從 notes 獨立為 posAttitudes 欄位；修正 clearDataVariables 初始化；DEV_RULES 新增狀態變數初始化規範；分析報告第三點改版（釋出→去向）；第二層製程優化；天數門檻統一 60 交易日。', type: 'feature' },
+    // [V4.117] 新增「持倉態度」欄位（積極佈局/中性觀察/等待換線）
+    // 原因：讓使用者標記對每支標的的操作意圖，供後續分析引擎（V4.118）使用
+    // 影響範圍：noteRow 備忘錄展開列、saveNote/clearNoteField/clearAllNote、
+    //            notes 資料結構、備份/還原、報表標頭與資料列、使用說明
+    'V4.117': { text: '新增持倉態度欄位（🔼積極佈局/👁中性觀察/🔄等待換線），存於備忘錄展開列，備份同步帶走，報表新增持倉態度欄。', type: 'feature' },
+    // [V4.116] 修正新入資金與新入持股邏輯 + 可調度資金公式
+    // 原因：新標的金額被重複計入模擬總資產；可調度資金只算「分批減碼×30%」導致常顯示$0
+    // 新邏輯：新標的從新入資金扣除；可調度資金=所有超配分類市值+新入資金剩餘
+    // 影響範圍：buildAnalysisReport simTotal / totalFunds / 前置輸入 modal 即時剩餘顯示
+    'V4.116': { text: '修正新入資金邏輯（新標的從新入資金撥入，模擬總資產不重複計算）；修正可調度資金公式（改為超配市值+新入資金剩餘）；前置輸入框新增即時剩餘可分配金額顯示。', type: 'fix' },
+    // [V4.115] Bug 修正：現役天數、呆滯料誤判、分析引擎天數門檻、週轉超配
+    // 根本原因：getActiveDays() 只查 rawTrades，從未賣出標的找不到買入日 → 顯示 —
+    //           isStale 用 s.days（歷史累積）而非現役天數 → 呆滯料誤判
+    //           分析引擎 holdDays 同樣用錯變數 → 建議列表空白
+    // 影響範圍：getActiveDays / isStale / buildAnalysisReport
+    'V4.115': { text: '修正現役天數 Bug（從未賣出標的改從 txnData Buy 紀錄計算）；修正呆滯料改用現役天數；分析引擎天數門檻改 30 天加 fallback；新增週轉超配賣出候選；DEV_RULES 補 Bug 處理規範。', type: 'fix' },
+    // [V4.114] 新增「📖 產線分析」功能
+    // 原因：讓系統能即時產出結構化分析報告，整合五層判斷框架
+    // 包含：前置輸入（新入資金/新標的）、操作前後占比對比、可執行動作表格、匯出功能
+    // 影響範圍：新增 analysisModal HTML、openAnalysisModal/buildAnalysisReport 函數、posTypePanel 按鈕
+    'V4.114': { text: '新增「📖 產線分析」按鈕與 Modal：五層結構化分析報告，支援新入資金/新標的前置輸入，操作前後占比對比，可複製/下載分析結果。', type: 'feature' },
     // [V4.113] noteRow 備忘錄展開列改為三列垂直排版，手機版同步適配
     // 原因：原本一列橫排四欄，空間擠、手機閱讀差
     // 影響範圍：noteRow HTML 結構、mobile CSS
@@ -5200,6 +6199,13 @@ function toggleHideNumbers() {
     if (document.getElementById('page-trend').style.display !== 'none') {
         renderTrend();
     }
+    // [V4.121] 隱藏數字時 disable 產線分析按鈕，避免報告洩漏數字
+    const analysisBtn = document.querySelector('button[onclick="openAnalysisModal()"]');
+    if (analysisBtn) {
+        analysisBtn.disabled = numbersHidden;
+        analysisBtn.style.opacity = numbersHidden ? '0.4' : '1';
+        analysisBtn.title = numbersHidden ? '隱藏數字模式下無法開啟' : '';
+    }
 }
 
 // ══════════════════════════════════════════════════════
@@ -5388,62 +6394,17 @@ function generateReportForUser(userName, today, isMerge=false) {
         `## 持股明細`,
         // [V4.112] 報表標頭對齊主畫面：移除目標售價欄（主畫面已改為持倉性質下拉，無目標售價欄位）
         // 原邏輯：...持倉性質,目標售價,進場理由,停損價,解套目標價,獲利目標價,操作建議
-        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,累計佔用天數,現役天數,歷史日均產值,現役日均產值,滾動日均產值(近365天),產值貢獻%,總日均產值,52W低點,52W高點,52W位置%,持倉性質,進場理由,停損價,解套目標價,獲利目標價,操作建議`
+// [V4.117] 報表標頭新增「持倉態度」欄位，緊接在持倉性質之後
+        // [V4.118] 持倉態度改從 posAttitudes 讀取，欄位順序維持不變
+        `Symbol,現股,均成本,即時股價,成本基礎,未實現損益,未實現%,市值,持股占比,累積實現損益,累計佔用天數,現役天數,歷史日均產值,現役日均產值,滾動日均產值(近365天),產值貢獻%,總日均產值,52W低點,52W高點,52W位置%,持倉性質,持倉態度,進場理由,停損價,解套目標價,獲利目標價,操作建議`
     ].join('\n');
 
-    // 計算滾動基準日
-    const bd = new Date(); bd.setFullYear(bd.getFullYear()-1);
-    const bds = bd.toISOString().slice(0,10);
-    function getReportRollingGain(sym) {
-        return rawTrades.filter(t => {
-            if (t.sym !== sym) return false;
-            const cd = t.closeDate || ''; if (!cd) return false;
-            const parts = cd.split('/');
-            if (parts.length === 3) {
-                const iso = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
-                return iso >= bds;
-            }
-            return cd >= bds;
-        }).reduce((s,t) => s + (t.gain||0), 0);
-    }
-    const grandRolling = inventory.reduce((sum,it) => sum + getReportRollingGain(it.Symbol)/365, 0);
+    // [V4.128] 三個報表獨立副本全部刪除，改呼叫全域函數
+    // 原因：getReportRollingGain/getReportActiveDays/getReportActiveGain 各自維護副本，
+    //        導致 fallback 邏輯不同（從未賣出標的現役天數報表顯示0）、邏輯分歧難以維護
+    // 影響範圍：報表現役天數、現役日均產值、滾動日均產值、產值貢獻% 全部對齊主畫面
+    const grandRolling = inventory.reduce((sum,it) => sum + getRollingGain(it.Symbol)/365, 0);
 
-    // [V4.66] 現役天數/現役損益計算（CSV 報表用）
-    function getReportActiveDays(sym) {
-        const symTrades = rawTrades.filter(t => t.sym === sym);
-        if (!symTrades.length) return 0;
-        const parseDate = (d) => {
-            if (!d) return null;
-            const p = d.split('/');
-            return p.length===3 ? `${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}` : d;
-        };
-        const sortedT = [...symTrades].sort((a,b)=>(parseDate(a.openDate)||'').localeCompare(parseDate(b.openDate)||''));
-        const closeDates = sortedT.map(t=>parseDate(t.closeDate)).filter(Boolean).sort();
-        const openDates  = sortedT.map(t=>parseDate(t.openDate)).filter(Boolean).sort();
-        const lastClose  = closeDates[closeDates.length-1]||'';
-        const newRoundOpens = openDates.filter(d=>d>lastClose);
-        const startDate = newRoundOpens.length>0 ? newRoundOpens[0] : (openDates[0]||'');
-        if (!startDate) return 0;
-        const today = new Date().toISOString().slice(0,10);
-        return Math.max(0, Math.ceil((new Date(today)-new Date(startDate))/86400000));
-    }
-    function getReportActiveGain(sym) {
-        const symTrades = rawTrades.filter(t => t.sym === sym);
-        if (!symTrades.length) return 0;
-        const parseDate = (d) => {
-            if (!d) return null;
-            const p = d.split('/');
-            return p.length===3 ? `${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}` : d;
-        };
-        const sortedT = [...symTrades].sort((a,b)=>(parseDate(a.openDate)||'').localeCompare(parseDate(b.openDate)||''));
-        const closeDates = sortedT.map(t=>parseDate(t.closeDate)).filter(Boolean).sort();
-        const openDates  = sortedT.map(t=>parseDate(t.openDate)).filter(Boolean).sort();
-        const lastClose  = closeDates[closeDates.length-1]||'';
-        const newRoundOpens = openDates.filter(d=>d>lastClose);
-        const startDate = newRoundOpens.length>0 ? newRoundOpens[0] : (openDates[0]||'');
-        if (!startDate) return 0;
-        return symTrades.filter(t=>(parseDate(t.openDate)||'')>=startDate).reduce((s,t)=>s+(t.gain||0),0);
-    }
 
     const rows = inventory.map(item => {
         const s = stats[item.Symbol]||{gain:0,days:0};
@@ -5453,14 +6414,19 @@ function generateReportForUser(userName, today, isMerge=false) {
         const up = cb>0?(ur/cb*100).toFixed(1):'—';
         const wt = totalMV>0?(mv/totalMV*100).toFixed(1):'—';
         const do_ = s.days>0?(s.gain/s.days).toFixed(2):'0';
-        // [V4.66] 現役天數、現役日均產值
-        const ad = getReportActiveDays(item.Symbol);
-        const ag = getReportActiveGain(item.Symbol);
+        // [V4.128] 改呼叫全域 getActiveDays/getActiveGain/getRollingGain，刪除三個獨立副本
+        const ad = getActiveDays(item.Symbol);
+        const ag = getActiveGain(item.Symbol);
         const ado = ad>0?(ag/ad).toFixed(2):'—';
-        const rg = getReportRollingGain(item.Symbol);
+        const rg = getRollingGain(item.Symbol);
         const ro = (rg/365).toFixed(2);
         const contrib = grandRolling!==0 ? ((rg/365)/grandRolling*100).toFixed(1)+'%' : '—';
-        const tdo = (s.days>0 && p!==undefined) ? ((s.gain+ur)/s.days).toFixed(2) : '—';
+        // [V4.127] 總日均產值判斷條件改與主畫面 cellMap totalDailyOut 完全一致
+        // 原邏輯：(s.days>0 && p!==undefined)，與 cellMap 語義等效但各自維護，未來改動易漏同步
+        // 新邏輯：(s.days <= 0 || p === undefined) 顯示 '—'，對齊 cellMap 的 ur_ === null 判斷
+        // 影響範圍：報表「總日均產值」欄，無股價或無交易日數時顯示 '—'
+        const ur_r = p !== undefined ? (mv - cb) : null;
+        const tdo = (s.days <= 0 || ur_r === null) ? '—' : ((s.gain + ur_r) / s.days).toFixed(2);
         const w52 = weekData[item.Symbol];
         const pos52 = (w52&&p)?((p-w52.low52)/(w52.high52-w52.low52)*100).toFixed(1):'—';
         const note = notes[item.Symbol]||{};
@@ -5470,10 +6436,10 @@ function generateReportForUser(userName, today, isMerge=false) {
             s.days, ad, do_, ado,
             ro,contrib,tdo,
             w52?w52.low52.toFixed(2):'—',w52?w52.high52.toFixed(2):'—',pos52+'%',
-            // [V4.112] 報表資料列對齊主畫面：移除 note.target（目標售價已移除）
-            // 操作建議同步 V4.111 三路邏輯（核心/衛星/週轉/未設定）
-            // 原邏輯：ptLabel, note.target, note.entryReason, note.stopLoss, co, profitTarget, 舊四分類決策
+            // [V4.117] 報表資料列新增持倉態度，緊接在持倉性質之後
+            // [V4.118] 持倉態度改從 posAttitudes[sym] 讀取，不再從 notes.attitude
             ptLabel[posTypes[item.Symbol]||''] || '未設定',
+            (() => { const a = posAttitudes[item.Symbol]||''; return a==='active'?'積極佈局':a==='neutral'?'中性觀察':a==='exit'?'等待換線':'—'; })(),
             note.entryReason||'—',note.stopLoss||'—',
             // [V4.104] 解套目標價 = 均成本
             co.toFixed(2),
@@ -5499,9 +6465,13 @@ function generateReportForUser(userName, today, isMerge=false) {
                     return pct_ > (posTypeTargets?.core ?? 50) ? '超配：建議減碼' : '核心持倉：長期續抱';
                 }
                 if (posT_ === 'satellite') {
+                    // [V4.127] 補入持倉態度判斷，與主畫面 cellMap decision 完全一致
+                    // 原因：V4.118 新增 posAttitudes 接入衛星路時，只更新了 cellMap，漏掉報表
+                    // 影響範圍：衛星+積極佈局+股價<52W高點75% 時，報表從「觀察換線」改為正確的「攤平中」
+                    const att_ = posAttitudes[item.Symbol] || '';
                     const pt_ = (ur__>0&&w52_) ? w52_.high52*0.98 : co*1.05;
                     if (p >= pt_) return '可分批減碼';
-                    if (w52_ && p < w52_.high52*0.75) return '觀察換線';
+                    if (w52_ && p < w52_.high52*0.75) return att_ === 'active' ? '攤平中' : '觀察換線';
                     if (p < co) return '攤平中';
                     return '產線運行中';
                 }
@@ -6466,9 +7436,15 @@ function clearDataVariables() {
     // [V4.110] 持倉性質重置
     posTypes = {};
     posTypeTargets = { core: 50, satellite: 40, turnover: 10 };
+    // [V4.118] 持倉態度重置
+    // DEV_RULES：新增狀態變數時必須同步在此處補初始化，否則清除後狀態殘留
+    posAttitudes = {};
     watchlist = []; wlData = {};
     colOrder = [...DEFAULT_COL_ORDER];
     kpiOrder = [...DEFAULT_KPI_ORDER];
+    // [V4.121] 隱藏欄位重置
+    hiddenCols = new Set();
+    localStorage.removeItem('hunter_hidden_cols');
     csvFormats = {};           // [V4.70] 通用匯入格式範本
 }
 
@@ -6529,6 +7505,10 @@ function resetUIState() {
     if (priceSourceTag) priceSourceTag.textContent = '來源: —';
     const priceTimeTag = document.getElementById('priceTimeTag');
     if (priceTimeTag) priceTimeTag.textContent = '尚未更新｜請使用上方「⚡ 全股價」更新';
+    // [V4.126] 重置持倉性質分佈面板 UI
+    // 原因：clearDataVariables 已重置 posTypeTargets 資料，但 resetUIState 未呼叫 renderPosTypeDist
+    // 導致清除後分佈卡片與 input 欄位殘留舊帳戶數字（V4.118 只修了資料未修 UI）
+    renderPosTypeDist();
 }
 
 function clearAllData() {
@@ -6588,12 +7568,14 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.113',
+        version: 'V4.128',
         exportTime: new Date().toISOString(),
         users: selected,
         watchlist: watchlist,
         colOrder: colOrder,
         kpiOrder: kpiOrder,
+        // [V4.121] 備份時帶走隱藏欄位設定
+        hiddenCols: [...hiddenCols],
         // [V4.70] 備份時同步帶走 CSV 格式範本庫
         csvFormats: csvFormats,
         data: {}
@@ -6651,6 +7633,13 @@ function doBackupRestore(input) {
                 DEFAULT_COL_ORDER.forEach(k => { if (!colOrder.includes(k)) colOrder.push(k); });
                 colOrder = colOrder.filter(k => COL_DEFS.some(c=>c.key===k));
                 localStorage.setItem('hunter_col_order', JSON.stringify(colOrder));
+            }
+
+            // [V4.121] 還原隱藏欄位設定
+            // 原因：hiddenCols 原本只存 localStorage，換設備後遺失；現在備份帶走
+            if (backup.hiddenCols && Array.isArray(backup.hiddenCols)) {
+                hiddenCols = new Set(backup.hiddenCols.filter(k => COL_DEFS.some(c=>c.key===k)));
+                saveHiddenCols();
             }
 
             // 還原 KPI 順序
