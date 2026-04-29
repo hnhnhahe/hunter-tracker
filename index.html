@@ -216,7 +216,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.128</title>
+<title>獵人追蹤戰情室 V4.130</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -715,6 +715,24 @@ input[type=file]::file-selector-button {
 .format-save-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--yellow-l); border: 1px solid #fde68a; border-radius: 6px; margin-top: 10px; flex-wrap: wrap; }
 .format-save-row input { flex: 1; padding: 5px 8px; border: 1px solid #fcd34d; border-radius: 5px; font-size: .78rem; }
 .import-summary { font-size: .78rem; line-height: 1.8; padding: 10px 12px; background: var(--green-l); border: 1px solid #bbf7d0; border-radius: 6px; }
+
+/* ── [V4.128] 匯入 SOP 頁面樣式 ── */
+.sop-step { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; transition: box-shadow .2s; }
+.sop-step:hover { box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+.sop-step.done { border-color: #bbf7d0; background: #f0fdf4; }
+.sop-step-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; background: var(--card); }
+.sop-step.done .sop-step-header { background: #f0fdf4; }
+.sop-num { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 700; flex-shrink: 0; }
+.sop-step.done .sop-num { background: #16a34a; }
+.sop-chevron { font-size: .65rem; color: var(--text3); transition: transform .2s; }
+.sop-step.open .sop-chevron { transform: rotate(180deg); }
+.sop-body { display: none; padding: 12px 14px; border-top: 1px solid var(--border); background: #fafafa; }
+.sop-step.open .sop-body { display: block; }
+.sop-instruction { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; font-size: .78rem; color: var(--text); line-height: 1.7; }
+.sop-step-num { flex-shrink: 0; background: #e2e8f0; color: #475569; font-size: .68rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; margin-top: 2px; }
+.sop-note { font-size: .73rem; color: #d97706; background: #fffbeb; border-left: 3px solid #f59e0b; padding: 5px 10px; border-radius: 0 4px 4px 0; margin-top: 6px; line-height: 1.6; }
+.sop-check-wrap { display: flex; align-items: center; gap: 5px; font-size: .73rem; color: var(--text3); cursor: pointer; white-space: nowrap; }
+.sop-check { width: 15px; height: 15px; cursor: pointer; accent-color: #16a34a; }
 </style>
 </head>
 <body>
@@ -723,7 +741,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.128</span>
+        <span class="header-ver">V4.130</span>
     </div>
     <div class="header-right">
         <!-- 手機和電腦都顯示 -->
@@ -768,6 +786,7 @@ input[type=file]::file-selector-button {
     <div class="page-tab"        id="ptab-radar"  onclick="switchPage('radar')">🔍 即時查詢</div>
     <div class="page-tab"        id="ptab-watch"  onclick="switchPage('watch')">📌 Watchlist</div>
     <div class="page-tab"        id="ptab-filter" onclick="switchPage('filter')">🎯 條件篩選</div>
+    <div class="page-tab"        id="ptab-sop"    onclick="switchPage('sop')">📥 匯入 SOP</div>
 </div>
 
 <!-- ════════════════════════════════════════ -->
@@ -854,16 +873,27 @@ input[type=file]::file-selector-button {
                     <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">每日應達產值</div>
                     <div style="font-weight:700;font-size:.9rem" id="annualRequiredDaily">—</div>
                 </div>
+                <!-- [V4.130] 現役產能：只含現持倉標的近365天滾動日均加總，用於燈號與預測 -->
                 <div style="background:#f8fafc;border-radius:6px;padding:8px 10px">
-                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">目前滾動日均產值</div>
+                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">現役產能</div>
                     <div style="font-weight:700;font-size:.9rem" id="annualCurrentDaily">—</div>
+                </div>
+                <!-- [V4.130] 現役日均加總：周轉表各標的現役日均產值加總 -->
+                <div style="background:#f8fafc;border-radius:6px;padding:8px 10px">
+                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">現役日均加總</div>
+                    <div style="font-weight:700;font-size:.9rem" id="annualActiveDailySum">—</div>
+                </div>
+                <!-- [V4.130] 歷史產能（含出清）：全部rawTrades近365天÷365，純參考不參與預測 -->
+                <div style="background:#f8fafc;border-radius:6px;padding:8px 10px">
+                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">歷史產能（含出清）</div>
+                    <div style="font-weight:700;font-size:.9rem;color:var(--text3)" id="annualHistoricDaily">—</div>
                 </div>
             </div>
             <!-- 燈號 -->
             <div id="annualStatusMsg" style="font-size:.82rem;font-weight:700;text-align:center;padding:8px;border-radius:6px"></div>
             <!-- 預估年底資產 -->
             <div id="annualForecastWrap" style="margin-top:10px;padding:10px 12px;background:#f8fafc;border-radius:6px;border-left:4px solid var(--blue);display:none">
-                <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600">📈 按目前滾動日均產值預估</div>
+                <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600">📈 按現役產能預估</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                     <div>
                         <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">預估年底總資產</div>
@@ -1971,6 +2001,259 @@ input[type=file]::file-selector-button {
 </div>
 
 <!-- ════════════════════════════════════════ -->
+<!-- PAGE: 匯入 SOP  [V4.128]               -->
+<!-- ════════════════════════════════════════ -->
+<div class="page" id="page-sop" style="display:none">
+<div class="wrap">
+
+<div class="card section-gap">
+  <div class="card-header">
+    <div class="card-title">📥 匯入資料 SOP</div>
+    <div style="font-size:.72rem;color:var(--text3)">依序完成每個步驟，完成後打勾</div>
+  </div>
+  <div class="card-body">
+
+    <!-- SOP 路線選擇 -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button id="sopBtnSchwab" class="btn btn-primary btn-sm" onclick="sopShowRoute('schwab')">🏦 Schwab 用戶（①②③）</button>
+      <button id="sopBtnCustom" class="btn btn-outline btn-sm" onclick="sopShowRoute('custom')">🔧 其他券商（④⑤⑥）</button>
+    </div>
+
+    <!-- ── Schwab 路線 ── -->
+    <div id="sopRouteSchwab">
+
+      <!-- 前置作業 -->
+      <div style="font-weight:700;font-size:.8rem;color:#1d4ed8;padding:6px 10px;background:#eff6ff;border-radius:6px;border-left:3px solid #3b82f6;margin-bottom:12px">
+        📋 前置作業：先從 Schwab 網站匯出三份 CSV
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:.78rem;font-weight:700;color:var(--text2);margin-bottom:4px">Schwab 網站操作路徑</div>
+        <div style="font-size:.75rem;color:var(--text);line-height:1.9">
+          <div>① <strong>持倉 CSV</strong>：<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px">Accounts → Positions → Export</code> → 下載 <code style="background:#e2e8f0;padding:1px 5px;border-radius:3px">Individual-Positions-xxxx.csv</code></div>
+          <div>② <strong>已實現損益 CSV</strong>：<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px">History → Gain/Loss → Export</code> → 下載 <code style="background:#e2e8f0;padding:1px 5px;border-radius:3px">GainLoss_Realized_Details_xxxx.csv</code>（時間範圍選越長越好）</div>
+          <div>③ <strong>交易紀錄 CSV</strong>：<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px">History → Transactions → Export</code> → 下載 <code style="background:#e2e8f0;padding:1px 5px;border-radius:3px">Individual_XXX_Transactions_xxxx.csv</code>（選全部時間範圍）</div>
+        </div>
+      </div>
+
+      <!-- 步驟一 -->
+      <div class="sop-step" id="sopStep1">
+        <div class="sop-step-header" onclick="sopToggle(1)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="sop-num">1</div>
+            <div>
+              <div style="font-weight:700;font-size:.85rem">① 匯入持倉 CSV</div>
+              <div style="font-size:.72rem;color:var(--text3)">Individual-Positions-xxxx.csv</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="sop-check-wrap" onclick="event.stopPropagation()">
+              <input type="checkbox" class="sop-check" onchange="sopCheckStep(1,this)"> 完成
+            </label>
+            <span class="sop-chevron">▼</span>
+          </div>
+        </div>
+        <div class="sop-body">
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 1</div>
+            <div>展開畫面左上角的 <strong>🧬 數據源管理</strong> 區塊（點標題列展開）</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 2</div>
+            <div>找到 <strong>① 初始持股</strong> 欄位，點選檔案選擇框，上傳 <code>Individual-Positions-xxxx.csv</code></div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 3</div>
+            <div>等待下方診斷列出現 <span style="color:#16a34a;font-weight:600">✅ 持股已載入</span> 訊息，周轉表出現標的列表即為成功</div>
+          </div>
+          <div class="sop-note">📌 若出現帳戶選擇視窗，選擇對應帳戶後按確認</div>
+        </div>
+      </div>
+
+      <!-- 步驟二 -->
+      <div class="sop-step" id="sopStep2">
+        <div class="sop-step-header" onclick="sopToggle(2)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="sop-num">2</div>
+            <div>
+              <div style="font-weight:700;font-size:.85rem">② 匯入已實現損益 CSV</div>
+              <div style="font-size:.72rem;color:var(--text3)">GainLoss_Realized_Details_xxxx.csv</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="sop-check-wrap" onclick="event.stopPropagation()">
+              <input type="checkbox" class="sop-check" onchange="sopCheckStep(2,this)"> 完成
+            </label>
+            <span class="sop-chevron">▼</span>
+          </div>
+        </div>
+        <div class="sop-body">
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 1</div>
+            <div>在 <strong>🧬 數據源管理</strong> 區塊找到 <strong>② 已實現損益</strong> 欄位</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 2</div>
+            <div>上傳 <code>GainLoss_Realized_Details_xxxx.csv</code>，時間範圍建議選越長越好，歷史資料越完整，日均產值計算越準確</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 3</div>
+            <div>診斷列出現 <span style="color:#16a34a;font-weight:600">✅ 對帳單已載入</span>，表格的「累積實現損益」欄位開始有數字即為成功</div>
+          </div>
+          <div class="sop-note">📌 這份 CSV 影響：累積實現損益、歷史日均產值、現役日均產值、滾動日均產值、操作建議邏輯</div>
+        </div>
+      </div>
+
+      <!-- 步驟三 -->
+      <div class="sop-step" id="sopStep3">
+        <div class="sop-step-header" onclick="sopToggle(3)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="sop-num">3</div>
+            <div>
+              <div style="font-weight:700;font-size:.85rem">③ 更新即時股價</div>
+              <div style="font-size:.72rem;color:var(--text3)">點擊 ⚡ 全股價 按鈕</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="sop-check-wrap" onclick="event.stopPropagation()">
+              <input type="checkbox" class="sop-check" onchange="sopCheckStep(3,this)"> 完成
+            </label>
+            <span class="sop-chevron">▼</span>
+          </div>
+        </div>
+        <div class="sop-body">
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 1</div>
+            <div>點擊頁面頂端的 <strong>⚡ 全股價</strong> 按鈕</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 2</div>
+            <div>等待股價更新完成，數據源管理區塊下方會顯示最後更新時間與來源</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 3</div>
+            <div>確認周轉表中「市值」、「未實現損益%」欄位都有數字（不再是 —）</div>
+          </div>
+          <div class="sop-note">📌 股價更新後，市值、持股占比%、未實現損益、操作建議才會正確計算</div>
+        </div>
+      </div>
+
+      <!-- 步驟四 -->
+      <div class="sop-step" id="sopStep4">
+        <div class="sop-step-header" onclick="sopToggle(4)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="sop-num">4</div>
+            <div>
+              <div style="font-weight:700;font-size:.85rem">④ 匯入交易紀錄 CSV（選填）</div>
+              <div style="font-size:.72rem;color:var(--text3)">Individual_XXX_Transactions_xxxx.csv — 重建趨勢圖用</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="sop-check-wrap" onclick="event.stopPropagation()">
+              <input type="checkbox" class="sop-check" onchange="sopCheckStep(4,this)"> 完成
+            </label>
+            <span class="sop-chevron">▼</span>
+          </div>
+        </div>
+        <div class="sop-body">
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 1</div>
+            <div>在 <strong>🧬 數據源管理</strong> 找到 <strong>③ 交易紀錄</strong> 欄位，上傳 Transactions CSV</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 2</div>
+            <div>匯入成功後，展開 <strong>⚙️ 進階設定</strong>，點 <strong>📈 重建歷史快照</strong> 按鈕</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 3</div>
+            <div>前往 <strong>📈 趨勢報表</strong> 頁籤確認歷史資產走勢圖已正確顯示</div>
+          </div>
+          <div class="sop-note">⚠️ 此步驟僅首次設定需要，趨勢圖已有完整資料者不需重建快照</div>
+        </div>
+      </div>
+
+      <!-- 步驟五 -->
+      <div class="sop-step" id="sopStep5">
+        <div class="sop-step-header" onclick="sopToggle(5)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="sop-num">5</div>
+            <div>
+              <div style="font-weight:700;font-size:.85rem">⑤ 設定持倉性質與態度</div>
+              <div style="font-size:.72rem;color:var(--text3)">核心 / 衛星 / 週轉 ＋ 積極 / 中性</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="sop-check-wrap" onclick="event.stopPropagation()">
+              <input type="checkbox" class="sop-check" onchange="sopCheckStep(5,this)"> 完成
+            </label>
+            <span class="sop-chevron">▼</span>
+          </div>
+        </div>
+        <div class="sop-body">
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 1</div>
+            <div>周轉表中，每個標的的「持倉性質」欄位點擊下拉，選擇 <strong>核心 / 衛星 / 週轉</strong></div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 2</div>
+            <div>「持倉態度」欄位選擇 <strong>積極佈局 / 中性觀察</strong>，影響衛星路操作建議判斷</div>
+          </div>
+          <div class="sop-instruction">
+            <div class="sop-step-num">步驟 3</div>
+            <div>確認「操作建議」欄位顯示符合預期的判讀結果</div>
+          </div>
+          <div class="sop-note">📌 持倉性質決定走哪一路判讀邏輯（核心路 / 衛星路 / 週轉路），設定正確才能得到有效的操作建議</div>
+        </div>
+      </div>
+
+      <!-- 完成確認 -->
+      <div id="sopDoneMsg" style="display:none;margin-top:16px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;text-align:center">
+        <div style="font-size:1.2rem;margin-bottom:4px">✅</div>
+        <div style="font-weight:700;font-size:.85rem;color:#15803d">全部步驟完成！</div>
+        <div style="font-size:.75rem;color:#166534;margin-top:4px">可以前往 <strong>📋 戰情室</strong> 查看完整數據</div>
+      </div>
+
+      <!-- 日常更新說明 -->
+      <div style="margin-top:20px;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px">
+        <div style="font-weight:700;font-size:.78rem;color:#92400e;margin-bottom:8px">🔄 日常更新只需做這三步</div>
+        <div style="font-size:.75rem;color:#78350f;line-height:2">
+          <div>1. 重新從 Schwab 匯出並上傳 <strong>① 持倉 CSV</strong>（更新持股數量和均成本）</div>
+          <div>2. 重新上傳 <strong>② 已實現損益 CSV</strong>（更新損益記錄）</div>
+          <div>3. 點 <strong>⚡ 全股價</strong> 更新即時股價</div>
+          <div style="color:#d97706;margin-top:4px">③ 交易紀錄 CSV 只有在需要更新趨勢圖歷史時才需要重新匯入</div>
+        </div>
+      </div>
+
+    </div><!-- end sopRouteSchwab -->
+
+    <!-- ── 其他券商路線 ── -->
+    <div id="sopRouteCustom" style="display:none">
+      <div style="font-weight:700;font-size:.8rem;color:#b45309;padding:6px 10px;background:#fffbeb;border-radius:6px;border-left:3px solid #f59e0b;margin-bottom:12px">
+        🔧 通用 CSV 匯入（Firstrade / TD / 凱基 等其他券商）
+      </div>
+      <div style="font-size:.75rem;color:var(--text);line-height:2;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);margin-bottom:12px">
+        <div>1. 展開 <strong>🧬 數據源管理</strong> → 找到下方 <strong>🔧 通用 CSV 匯入</strong> 區塊</div>
+        <div>2. 點 <strong>④ 自訂持倉</strong>，上傳持倉 CSV，手動對應欄位（股票代號、股數、均成本）</div>
+        <div>3. 點 <strong>⑤ 自訂已實現損益</strong>，上傳損益 CSV，手動對應欄位</div>
+        <div>4. 點 <strong>⑥ 自訂交易紀錄</strong>（選填），上傳後重建歷史快照</div>
+        <div>5. 點 <strong>⚡ 全股價</strong> 更新即時股價</div>
+        <div>6. 設定各標的持倉性質與態度</div>
+      </div>
+      <div style="padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px">
+        <div style="font-weight:700;font-size:.78rem;color:#991b1b;margin-bottom:4px">⚠️ 注意事項</div>
+        <div style="font-size:.74rem;color:#7f1d1d;line-height:1.8">
+          <div>• Schwab ①②③ 與通用 ④⑤⑥ 互斥，同一帳戶只能用一種入口</div>
+          <div>• 已匯入 Schwab 資料時，通用匯入按鈕會自動鎖定</div>
+          <div>• 如需切換，請先點「清除所有資料」再重新匯入</div>
+        </div>
+      </div>
+    </div><!-- end sopRouteCustom -->
+
+  </div>
+</div>
+
+</div>
+</div>
+<!-- ════════════════════════════════════════ -->
 <!-- PAGE: 趨勢報表                          -->
 <!-- ════════════════════════════════════════ -->
 <div class="page" id="page-trend" style="display:none">
@@ -2101,7 +2384,7 @@ input[type=file]::file-selector-button {
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.128 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.130 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -2428,11 +2711,36 @@ function deleteUser(name) {
 //  PAGE SWITCH
 // ══════════════════════════════════════════════════════
 function switchPage(name) {
-    ['main','radar','watch','filter','trend'].forEach(p => {
+    ['main','radar','watch','filter','trend','sop'].forEach(p => {
         document.getElementById('page-'+p).style.display = p===name ? '' : 'none';
         document.getElementById('ptab-'+p).classList.toggle('active', p===name);
     });
     if (name === 'trend') renderTrend();
+}
+
+// ── [V4.128] 匯入 SOP 互動邏輯 ──
+function sopShowRoute(route) {
+    document.getElementById('sopRouteSchwab').style.display = route === 'schwab' ? '' : 'none';
+    document.getElementById('sopRouteCustom').style.display  = route === 'custom'  ? '' : 'none';
+    document.getElementById('sopBtnSchwab').className = route === 'schwab' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    document.getElementById('sopBtnCustom').className  = route === 'custom'  ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+}
+function sopToggle(n) {
+    const el = document.getElementById('sopStep'+n);
+    el.classList.toggle('open');
+}
+function sopCheckStep(n, cb) {
+    const el = document.getElementById('sopStep'+n);
+    if (cb.checked) {
+        el.classList.add('done');
+        el.classList.remove('open');
+    } else {
+        el.classList.remove('done');
+    }
+    // 全部勾選時顯示完成訊息（Schwab 路線共 5 步）
+    const checks = document.querySelectorAll('#sopRouteSchwab .sop-check');
+    const allDone = Array.from(checks).every(c => c.checked);
+    document.getElementById('sopDoneMsg').style.display = allDone ? '' : 'none';
 }
 
 // ══════════════════════════════════════════════════════
@@ -2786,16 +3094,31 @@ function renderAnnualGoal() {
     const shortfall = goal - currentTotal;
     const requiredDaily = shortfall > 0 ? shortfall / tradingDaysLeft : 0;
 
-    // 目前全場滾動日均產值（近365天）
+    // [V4.130] 三個產能指標
     const bd = new Date(); bd.setFullYear(bd.getFullYear()-1);
     const bds = bd.toISOString().slice(0,10);
-    const rollingGainTotal = rawTrades.filter(t=>{
+
+    // 1. 歷史產能（含出清）：全部 rawTrades 近365天 ÷ 365，純參考
+    const historicGainTotal = rawTrades.filter(t=>{
         const cd=t.closeDate||''; if(!cd) return false;
         const parts=cd.split('/');
         if(parts.length===3){const iso=`${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;return iso>=bds;}
         return cd>=bds;
     }).reduce((s,t)=>s+(t.gain||0),0);
-    const currentDaily = rollingGainTotal / 365;
+    const historicDaily = historicGainTotal / 365;
+
+    // 2. 現役產能：只含現持倉標的的近365天滾動日均加總，用於燈號與預測
+    const activeDaily = inventory.reduce((sum, it) => sum + getRollingGain(it.Symbol) / 365, 0);
+
+    // 3. 現役日均加總：各標的現役日均產值（getActiveGain / getActiveDays）加總
+    const activeDailySum = inventory.reduce((sum, it) => {
+        const ad = getActiveDays(it.Symbol);
+        const ag = getActiveGain(it.Symbol);
+        return sum + (ad > 0 ? ag / ad : 0);
+    }, 0);
+
+    // 預測用：現役產能
+    const currentDaily = activeDaily;
 
     // 進度條
     const progressPct = Math.min((currentTotal / goal) * 100, 100);
@@ -2810,8 +3133,14 @@ function renderAnnualGoal() {
     document.getElementById('annualShortfall').style.color = shortfall > 0 ? '#ef4444' : 'var(--green)';
     document.getElementById('annualDaysLeft').textContent = `${tradingDaysLeft} 天（估）`;
     document.getElementById('annualRequiredDaily').textContent = requiredDaily > 0 ? fmtUSD(requiredDaily) : '—';
-    document.getElementById('annualCurrentDaily').textContent = fmtUSD(currentDaily);
-    document.getElementById('annualCurrentDaily').style.color = currentDaily >= requiredDaily ? 'var(--green)' : '#ef4444';
+    document.getElementById('annualCurrentDaily').textContent = fmtUSD(activeDaily);
+    document.getElementById('annualCurrentDaily').style.color = activeDaily >= requiredDaily ? 'var(--green)' : '#ef4444';
+    // [V4.130] 現役日均加總
+    const adSumEl = document.getElementById('annualActiveDailySum');
+    if (adSumEl) { adSumEl.textContent = fmtUSD(activeDailySum); adSumEl.style.color = activeDailySum >= requiredDaily ? 'var(--green)' : '#ef4444'; }
+    // [V4.130] 歷史產能（含出清）純參考，固定灰色
+    const hdEl = document.getElementById('annualHistoricDaily');
+    if (hdEl) hdEl.textContent = fmtUSD(historicDaily);
 
     // 燈號
     const statusEl = document.getElementById('annualStatusMsg');
@@ -2819,10 +3148,10 @@ function renderAnnualGoal() {
         statusEl.textContent = '🎉 年度目標已達成！';
         statusEl.style.cssText = 'background:#f0fdf4;color:var(--green);font-size:.82rem;font-weight:700;text-align:center;padding:8px;border-radius:6px';
     } else if (currentDaily >= requiredDaily) {
-        statusEl.textContent = `🟢 綠燈：目前 ${fmtUSD(currentDaily)}/天 ≥ 應達 ${fmtUSD(requiredDaily)}/天`;
+        statusEl.textContent = `🟢 綠燈：現役產能 ${fmtUSD(currentDaily)}/天 ≥ 應達 ${fmtUSD(requiredDaily)}/天`;
         statusEl.style.cssText = 'background:#f0fdf4;color:var(--green);font-size:.82rem;font-weight:700;text-align:center;padding:8px;border-radius:6px';
     } else {
-        statusEl.textContent = `🔴 紅燈：目前 ${fmtUSD(currentDaily)}/天，還差 ${fmtUSD(requiredDaily - currentDaily)}/天`;
+        statusEl.textContent = `🔴 紅燈：現役產能 ${fmtUSD(currentDaily)}/天，還差 ${fmtUSD(requiredDaily - currentDaily)}/天`;
         statusEl.style.cssText = 'background:#fef2f2;color:#ef4444;font-size:.82rem;font-weight:700;text-align:center;padding:8px;border-radius:6px';
     }
 
@@ -5941,6 +6270,10 @@ function setKPI(id,val,cls) {
 // ══════════════════════════════════════════════════════
 // [V4.106] 改為 JS 物件管理，buildChangelog() 自動產生 HTML，不再手動維護 HTML 區塊
 const CHANGELOG = {
+    // [V4.130] 年度目標追蹤指標重構：現役產能/現役日均加總/歷史產能（含出清）三分
+    'V4.130': { text: '年度目標追蹤重構：(1)原「目前滾動日均產值」拆為三個指標：現役產能（只含現持倉標的近365天滾動日均加總）、現役日均加總（各標的現役日均產值加總）、歷史產能含出清（純參考） (2)燈號/預估年底資產/預估達成率改用「現役產能」計算，避免已出清標的高估未來產出 (3)報表同步更新。', type: 'feat' },
+    // [V4.129] 新增「📥 匯入 SOP」互動式頁籤
+    'V4.129': { text: '新增「📥 匯入 SOP」頁籤：Schwab 五步驟互動式 SOP（可展開收合、勾選完成、全部完成顯示提示）+ 其他券商通用路線說明 + 日常更新三步快速提示。', type: 'feat' },
     // [V4.128] 消除報表三個獨立副本，getRollingGain 提升全域，報表改呼叫全域函數，新增兩條 DEV_RULES
     'V4.128': { text: '消除報表獨立副本根本問題：(1)getRollingGain 提升為全域函數 (2)刪除 getReportRollingGain/getReportActiveDays/getReportActiveGain 三個副本，報表統一呼叫全域版，修正從未賣出標的現役天數報表顯示0的問題 (3)DEV_RULES 新增【報表函數副本規範】【版本基礎規範】。', type: 'fix' },
     // [V4.127] 修正報表與主畫面不一致：衛星路補 posAttitudes、getVal 排序補 posAttitudes、總日均產值判斷條件對齊 cellMap
@@ -6327,13 +6660,22 @@ function generateReportForUser(userName, today, isMerge=false) {
     const tradingDaysLeft = Math.max(1, Math.round(calDaysLeft * 0.714));
     const bd2 = new Date(); bd2.setFullYear(bd2.getFullYear()-1);
     const bds2 = bd2.toISOString().slice(0,10);
-    const rollingTotal = rawTrades.filter(t=>{
+    // [V4.130] 歷史產能（含出清）：全部 rawTrades 近365天，純參考
+    const historicTotal2 = rawTrades.filter(t=>{
         const cd=t.closeDate||''; if(!cd) return false;
         const parts=cd.split('/');
         if(parts.length===3){const iso=`${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;return iso>=bds2;}
         return cd>=bds2;
     }).reduce((s,t)=>s+(t.gain||0),0);
-    const currentDaily = rollingTotal / 365;
+    const historicDaily2 = historicTotal2 / 365;
+    // [V4.130] 現役產能：只含現持倉標的近365天滾動日均加總，用於預測
+    const activeDaily2 = inventory.reduce((sum, it) => sum + getRollingGain(it.Symbol) / 365, 0);
+    // [V4.130] 現役日均加總：各標的現役日均產值加總
+    const activeDailySum2 = inventory.reduce((sum, it) => {
+        const ad = getActiveDays(it.Symbol); const ag = getActiveGain(it.Symbol);
+        return sum + (ad > 0 ? ag / ad : 0);
+    }, 0);
+    const currentDaily = activeDaily2;
     const annualSection = annualGoal > 0 ? [
         ``,
         `## 年度產能目標追蹤`,
@@ -6343,7 +6685,9 @@ function generateReportForUser(userName, today, isMerge=false) {
         `剩餘缺口,$${Math.max(0, annualGoal - currentTotal).toFixed(2)}`,
         `距年底剩餘交易日（估）,${tradingDaysLeft} 天`,
         `每日應達產值,$${(Math.max(0, annualGoal - currentTotal) / tradingDaysLeft).toFixed(2)}`,
-        `目前滾動日均產值,$${currentDaily.toFixed(2)}`,
+        `現役產能（現持倉滾動日均）,$${activeDaily2.toFixed(2)}`,
+        `現役日均加總,$${activeDailySum2.toFixed(2)}`,
+        `歷史產能（含出清，參考）,$${historicDaily2.toFixed(2)}`,
         `燈號,${currentDaily >= (Math.max(0, annualGoal - currentTotal) / tradingDaysLeft) ? '🟢 綠燈' : '🔴 紅燈'}`,
         `預估年底總資產,$${(currentTotal + currentDaily * tradingDaysLeft).toFixed(2)}`,
         `預估達成率,${(((currentTotal + currentDaily * tradingDaysLeft) / annualGoal) * 100).toFixed(1)}%`,
@@ -7568,7 +7912,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.128',
+        version: 'V4.130',
         exportTime: new Date().toISOString(),
         users: selected,
         watchlist: watchlist,
