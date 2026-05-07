@@ -216,7 +216,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>獵人追蹤戰情室 V4.130</title>
+<title>獵人追蹤戰情室 V4.134</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script>
@@ -741,7 +741,7 @@ input[type=file]::file-selector-button {
 <div class="header">
     <div class="header-title">
         🎯 獵人追蹤戰情室
-        <span class="header-ver">V4.130</span>
+        <span class="header-ver">V4.134</span>
     </div>
     <div class="header-right">
         <!-- 手機和電腦都顯示 -->
@@ -875,7 +875,7 @@ input[type=file]::file-selector-button {
                 </div>
                 <!-- [V4.130] 現役產能：只含現持倉標的近365天滾動日均加總，用於燈號與預測 -->
                 <div style="background:#f8fafc;border-radius:6px;padding:8px 10px">
-                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">現役產能</div>
+                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">現役產能（持倉標的滾動日均產值加總）</div>
                     <div style="font-weight:700;font-size:.9rem" id="annualCurrentDaily">—</div>
                 </div>
                 <!-- [V4.130] 現役日均加總：周轉表各標的現役日均產值加總 -->
@@ -885,7 +885,7 @@ input[type=file]::file-selector-button {
                 </div>
                 <!-- [V4.130] 歷史產能（含出清）：全部rawTrades近365天÷365，純參考不參與預測 -->
                 <div style="background:#f8fafc;border-radius:6px;padding:8px 10px">
-                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">歷史產能（含出清）</div>
+                    <div style="font-size:.68rem;color:var(--text2);margin-bottom:2px">歷史產能（365天內有交易標的滾動日均產值加總）</div>
                     <div style="font-weight:700;font-size:.9rem;color:var(--text3)" id="annualHistoricDaily">—</div>
                 </div>
             </div>
@@ -1517,6 +1517,45 @@ input[type=file]::file-selector-button {
                 </div>
             </div>
 
+        </div>
+
+        <!-- G. 年度產能目標追蹤 [V4.132] 新增各指標公式說明 -->
+        <div style="margin-bottom:16px">
+            <div style="font-weight:700;font-size:.82rem;color:#1d4ed8;padding:5px 10px;background:#eff6ff;border-radius:6px;border-left:3px solid #3b82f6;margin-bottom:10px">
+                G. 年度產能目標追蹤
+            </div>
+            <div style="font-size:.78rem;color:var(--text);line-height:2;padding:8px 12px;background:#f8fafc;border-radius:6px;border:1px solid var(--border)">
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">每日應達產值</div>
+                <div style="color:#64748b;margin-bottom:8px">= （年底目標 − 目前總資產）÷ 距年底剩餘交易日（日曆天 × 0.714）</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">現役產能（持倉標的滾動日均產值加總）</div>
+                <div style="color:#64748b;margin-bottom:2px">= Σ（各持倉標的近365天已實現損益 ÷ 365）</div>
+                <div style="color:#64748b;margin-bottom:2px">對應周轉表「滾動日均產值」欄，只加總目前仍持倉的標的</div>
+                <div style="color:#d97706;margin-bottom:8px">📌 燈號、預估年底資產、達成率皆以此為計算基準</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">現役日均加總</div>
+                <div style="color:#64748b;margin-bottom:2px">= Σ（各持倉標的本輪現役損益 ÷ 現役天數）</div>
+                <div style="color:#64748b;margin-bottom:8px">對應周轉表「現役日均產值」欄加總，反映本輪進場後每日平均表現</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">歷史產能（365天內有交易標的滾動日均產值加總）</div>
+                <div style="color:#64748b;margin-bottom:2px">= 近365天內所有已實現損益（含已出清標的）加總 ÷ 365</div>
+                <div style="color:#64748b;margin-bottom:8px">純參考，不參與預測。若高於現役產能，代表已出清標的效能優於現持倉</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">預估年底總資產</div>
+                <div style="color:#64748b;margin-bottom:2px">= 目前總資產 + 現役產能 × 剩餘交易日</div>
+                <div style="color:#64748b;margin-bottom:8px">假設現役產能維持不變，線性推估年底資產</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">達成率</div>
+                <div style="color:#64748b;margin-bottom:2px">= 預估年底總資產 ÷ 年底目標 × 100%</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">距目標</div>
+                <div style="color:#64748b;margin-bottom:8px">= 預估年底總資產 − 年底目標（負值顯示「仍差」，正值顯示「超越」）</div>
+
+                <div style="font-weight:700;color:var(--text);margin-bottom:2px">燈號</div>
+                <div style="color:#64748b">🟢 綠燈：現役產能 ≥ 每日應達產值<br>🔴 紅燈：現役產能 ＜ 每日應達產值，顯示每天還差多少</div>
+
+            </div>
         </div>
 
     </div>
@@ -2379,12 +2418,29 @@ input[type=file]::file-selector-button {
         </div>
     </div>
 
+    <!-- [V4.133] 持股股數變化 -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">📦 持股股數變化</div>
+            <div class="flex-row">
+                <select class="input input-sm" id="sharesSymSelect" onchange="renderSharesChart()" style="width:120px">
+                    <option value="">選擇標的</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="sharesChartWrap">
+                <div style="font-size:.78rem;color:var(--text3);padding:20px 0;text-align:center">請選擇標的，或先匯入交易紀錄 CSV</div>
+            </div>
+        </div>
+    </div>
+
 </div>
 </div>
 
 <!-- ── FOOTER ── -->
 <div class="footer">
-    <span>HUNTER TRACKING SYSTEM V4.130 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
+    <span>HUNTER TRACKING SYSTEM V4.134 — SCM TURNOVER LOGIC APPLIED TO EQUITY</span>
     <span id="footerTime"></span>
 </div>
 
@@ -3029,7 +3085,8 @@ function numpadConfirm() {
         // 換算目標金額：年初總資產 × (1 + val/100)
         const thisYear = new Date().getFullYear();
         const yearSnaps = posSnapshots.filter(s=>s.date&&s.date.startsWith(String(thisYear))).sort((a,b)=>a.date.localeCompare(b.date));
-        const baseAssets = yearSnaps.length ? yearSnaps[0].totalAssets : 0;
+        // [V4.131] ytdBaseOverride 優先，快照為 fallback
+        const baseAssets = ytdBaseOverride[String(thisYear)] || (yearSnaps.length ? yearSnaps[0].totalAssets : 0);
         if (baseAssets && val > 0) {
             annualGoal = Math.round(baseAssets * (1 + val / 100));
             document.getElementById('annualGoalInput').value = annualGoal;
@@ -3082,7 +3139,12 @@ function renderAnnualGoal() {
     // 年初快照
     const thisYear = new Date().getFullYear();
     const yearSnaps = posSnapshots.filter(s=>s.date&&s.date.startsWith(String(thisYear))).sort((a,b)=>a.date.localeCompare(b.date));
-    const baseAssets = yearSnaps.length ? yearSnaps[0].totalAssets : 0;
+    // [V4.131] ytdBaseOverride 優先，快照為 fallback
+    const snapBase = yearSnaps.length ? yearSnaps[0].totalAssets : 0;
+    const baseAssets = ytdBaseOverride[String(thisYear)] || snapBase;
+    const baseLabel = ytdBaseOverride[String(thisYear)]
+        ? `年初基準（YTD校正）：${fmtUSD(baseAssets)}`
+        : (yearSnaps.length ? `年初基準（${yearSnaps[0].date}）：${fmtUSD(baseAssets)}` : '未找到年初快照');
 
     // 剩餘美股交易日（日曆天 × 0.714）
     const now = new Date();
@@ -3157,7 +3219,7 @@ function renderAnnualGoal() {
 
     // 基準說明
     const baseEl = document.getElementById('annualBaseline');
-    if (baseEl) baseEl.textContent = baseAssets ? `年初基準（${yearSnaps[0].date}）：${fmtUSD(baseAssets)}` : '未找到年初快照';
+    if (baseEl) baseEl.textContent = baseLabel;
 
     // 預估年底資產
     const forecastWrap = document.getElementById('annualForecastWrap');
@@ -5530,6 +5592,7 @@ function renderTrend() {
     buildSymSelect();
     buildCostSymSelect();
     renderCostChart();
+    buildSharesSymSelect(); // [V4.133]
 }
 
 let snapRange = 'ALL'; // 目前選擇的時間段
@@ -5999,6 +6062,147 @@ function buildCostSymSelect() {
         syms.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('');
 }
 
+// [V4.133] 持股股數變化 ── 從 txnData 累加計算每日持股股數
+function buildSharesSymSelect() {
+    const sel = document.getElementById('sharesSymSelect');
+    if (!sel) return;
+    // 從 txnData 撈出所有有 Buy/Sell 的標的
+    const syms = [...new Set(
+        txnData
+            .filter(t => ['buy','sell','reinvest shares','journaled shares','stock split'].includes(t.action.toLowerCase()) && t.symbol)
+            .map(t => t.symbol)
+    )].sort();
+    const current = sel.value;
+    sel.innerHTML = '<option value="">選擇標的</option>' +
+        syms.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('');
+}
+
+function renderSharesChart() {
+    const wrap = document.getElementById('sharesChartWrap');
+    const sym  = document.getElementById('sharesSymSelect')?.value;
+    if (!wrap) return;
+
+    if (!txnData.length) {
+        wrap.innerHTML = '<div style="font-size:.78rem;color:var(--text3);padding:20px 0;text-align:center">尚未匯入交易紀錄 CSV，無法顯示股數變化</div>';
+        return;
+    }
+    if (!sym) {
+        wrap.innerHTML = '<div style="font-size:.78rem;color:var(--text3);padding:20px 0;text-align:center">請選擇標的</div>';
+        return;
+    }
+
+    // [V4.134] 以持倉 CSV 現在股數為錨點，往回推算每個時間點的股數
+    // 原因：從 0 累加會因交易紀錄不完整而算錯起點
+    const invItem = inventory.find(i => i.Symbol === sym);
+    const currentShares = invItem ? (invItem.Shares || 0) : 0;
+
+    const txns = txnData
+        .filter(t => t.symbol === sym)
+        .sort((a, b) => b.date.localeCompare(a.date)); // 倒序
+
+    if (!txns.length) {
+        wrap.innerHTML = `<div style="font-size:.78rem;color:var(--text3);padding:20px 0;text-align:center">${sym} 沒有交易紀錄</div>`;
+        return;
+    }
+
+    let holdQty = currentShares;
+    const points = [{ date: new Date().toISOString().slice(0, 10), qty: holdQty, action: '現在' }];
+
+    txns.forEach(t => {
+        const act = t.action.toLowerCase();
+        const qty = Math.abs(t.qty || 0);
+        if (['buy', 'reinvest shares', 'journaled shares'].includes(act)) {
+            holdQty = Math.max(0, holdQty - qty);
+        } else if (act === 'sell') {
+            holdQty += qty;
+        } else if (act === 'stock split') {
+            holdQty = Math.max(0, holdQty - qty);
+        }
+        points.push({ date: t.date, qty: holdQty, action: t.action });
+    });
+
+    points.reverse(); // 正序（舊→新）
+
+    wrap.innerHTML = `<canvas id="sharesCanvas" class="trend-canvas" style="height:220px"></canvas>
+        <div id="sharesLegend" style="margin-top:8px;font-size:.72rem;color:var(--text2)"></div>`;
+
+    const canvas = document.getElementById('sharesCanvas');
+    const ctx    = canvas.getContext('2d');
+    const dpr    = window.devicePixelRatio || 1;
+    canvas.width  = canvas.offsetWidth * dpr;
+    canvas.height = 220 * dpr;
+    ctx.scale(dpr, dpr);
+    const W = canvas.offsetWidth, H = 220;
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = { top: 20, right: 20, bottom: 40, left: 60 };
+    const cW  = W - pad.left - pad.right;
+    const cH  = H - pad.top  - pad.bottom;
+    const maxQty = Math.max(...points.map(p => p.qty), 1);
+    const n      = points.length;
+    const xPos = i   => pad.left + (i / (n - 1 || 1)) * cW;
+    const yPos = qty => pad.top  + cH - (qty / maxQty) * cH;
+
+    ctx.beginPath();
+    ctx.moveTo(xPos(0), yPos(points[0].qty));
+    points.forEach((p, i) => { if (i > 0) ctx.lineTo(xPos(i), yPos(p.qty)); });
+    ctx.lineTo(xPos(n - 1), pad.top + cH);
+    ctx.lineTo(xPos(0),     pad.top + cH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(59,130,246,0.10)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth   = 2;
+    points.forEach((p, i) => {
+        i === 0 ? ctx.moveTo(xPos(i), yPos(p.qty)) : ctx.lineTo(xPos(i), yPos(p.qty));
+    });
+    ctx.stroke();
+
+    points.forEach((p, i) => {
+        const act = p.action.toLowerCase();
+        ctx.beginPath();
+        ctx.arc(xPos(i), yPos(p.qty), 3.5, 0, Math.PI * 2);
+        ctx.fillStyle   = act === 'sell' ? '#ef4444' : act === 'stock split' ? '#f59e0b' : act === '現在' ? '#16a34a' : '#3b82f6';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth   = 1.5;
+        ctx.fill();
+        ctx.stroke();
+    });
+
+    ctx.fillStyle = '#9ca3af';
+    ctx.font      = '11px sans-serif';
+    ctx.textAlign = 'right';
+    [0, 0.25, 0.5, 0.75, 1].forEach(r => {
+        const v = Math.round(r * maxQty);
+        const y = yPos(v);
+        ctx.fillText(v.toLocaleString(), pad.left - 6, y + 4);
+        ctx.beginPath();
+        ctx.strokeStyle = '#f0f0f0';
+        ctx.lineWidth   = 1;
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + cW, y);
+        ctx.stroke();
+    });
+
+    ctx.fillStyle = '#9ca3af';
+    ctx.textAlign = 'center';
+    const step = Math.max(1, Math.floor(n / 6));
+    points.forEach((p, i) => {
+        if (i % step !== 0 && i !== n - 1) return;
+        ctx.fillText(p.date.slice(0, 7), xPos(i), H - pad.bottom + 14);
+    });
+
+    document.getElementById('sharesLegend').innerHTML =
+        `<span style="color:#3b82f6">● 買入</span>&nbsp;&nbsp;
+         <span style="color:#ef4444">● 賣出</span>&nbsp;&nbsp;
+         <span style="color:#f59e0b">● 股票分割</span>&nbsp;&nbsp;
+         <span style="color:#16a34a">● 現在</span>&nbsp;&nbsp;
+         目前持股（持倉CSV）：<strong>${currentShares.toLocaleString()} 股</strong>`;
+}
+
+
 function renderCostChart() {
     const canvas = document.getElementById('costChart');
     const legend = document.getElementById('costChartLegend');
@@ -6270,6 +6474,14 @@ function setKPI(id,val,cls) {
 // ══════════════════════════════════════════════════════
 // [V4.106] 改為 JS 物件管理，buildChangelog() 自動產生 HTML，不再手動維護 HTML 區塊
 const CHANGELOG = {
+    // [V4.134] 修正持股股數變化圖邏輯：改以持倉CSV為錨點往回推算
+    'V4.134': { text: '修正持股股數變化圖計算邏輯：原本從0累加導致交易紀錄不完整時起點錯誤，改為以持倉CSV現在股數為錨點往回推算，確保圖表終點與實際持股一致。圖例同步標示現在股數來源為持倉CSV。', type: 'fix' },
+    // [V4.133] 趨勢報表新增「持股股數變化」折線圖
+    'V4.133': { text: '趨勢報表新增「📦 持股股數變化」區塊：從 txnData 交易紀錄累加計算每筆交易後的持股股數，以折線圖呈現。買入藍點、賣出紅點、股票分割橙點，圖例顯示目前持股股數。需先匯入交易紀錄 CSV。', type: 'feat' },
+    // [V4.132] 年度目標追蹤標籤名稱更新、使用說明補公式
+    'V4.132': { text: '年度目標追蹤：(1)「現役產能」改標示為「現役產能（持倉標的滾動日均產值加總）」(2)「歷史產能（含出清）」改標示為「歷史產能（365天內有交易標的滾動日均產值加總）」(3)使用說明新增 G. 年度產能目標追蹤區塊，補齊所有指標公式。', type: 'feat' },
+    // [V4.131] 年度目標追蹤年初基準改用 ytdBaseOverride 優先
+    'V4.131': { text: '修正年度目標追蹤年初基準未讀取 YTD 校正值：renderAnnualGoal / 成長%換算目標 / 報表輸出三處，改為 ytdBaseOverride 優先、快照為 fallback，年初基準標籤同步顯示「YTD校正」字樣加以區分。', type: 'fix' },
     // [V4.130] 年度目標追蹤指標重構：現役產能/現役日均加總/歷史產能（含出清）三分
     'V4.130': { text: '年度目標追蹤重構：(1)原「目前滾動日均產值」拆為三個指標：現役產能（只含現持倉標的近365天滾動日均加總）、現役日均加總（各標的現役日均產值加總）、歷史產能含出清（純參考） (2)燈號/預估年底資產/預估達成率改用「現役產能」計算，避免已出清標的高估未來產出 (3)報表同步更新。', type: 'feat' },
     // [V4.129] 新增「📥 匯入 SOP」互動式頁籤
@@ -6652,7 +6864,12 @@ function generateReportForUser(userName, today, isMerge=false) {
     // 年度目標追蹤數據
     const thisYear = new Date().getFullYear();
     const yearSnaps = posSnapshots.filter(s=>s.date&&s.date.startsWith(String(thisYear))).sort((a,b)=>a.date.localeCompare(b.date));
-    const baseAssets = yearSnaps.length ? yearSnaps[0].totalAssets : 0;
+    // [V4.131] ytdBaseOverride 優先，快照為 fallback
+    const snapBase2 = yearSnaps.length ? yearSnaps[0].totalAssets : 0;
+    const baseAssets = ytdBaseOverride[String(thisYear)] || snapBase2;
+    const baseLabelStr = ytdBaseOverride[String(thisYear)]
+        ? `年初基準（YTD校正）,$${baseAssets.toFixed(2)}`
+        : `年初基準（${yearSnaps[0]?.date||'—'}）,$${baseAssets.toFixed(2)}`;
     const currentTotal = totalMV + currentCash;
     const now = new Date();
     const yearEnd = new Date(thisYear, 11, 31);
@@ -6681,7 +6898,7 @@ function generateReportForUser(userName, today, isMerge=false) {
         `## 年度產能目標追蹤`,
         `年底目標,$${annualGoal.toFixed(2)}`,
         `目前總資產,$${currentTotal.toFixed(2)}`,
-        `年初基準（${yearSnaps[0]?.date||'—'}）,$${baseAssets.toFixed(2)}`,
+        baseLabelStr,
         `剩餘缺口,$${Math.max(0, annualGoal - currentTotal).toFixed(2)}`,
         `距年底剩餘交易日（估）,${tradingDaysLeft} 天`,
         `每日應達產值,$${(Math.max(0, annualGoal - currentTotal) / tradingDaysLeft).toFixed(2)}`,
@@ -7912,7 +8129,7 @@ function doBackupExport() {
     const selected = [...document.querySelectorAll('#backupUserList input[type=checkbox]:checked')].map(cb=>cb.value);
     if (!selected.length) { alert('請至少選一個帳戶'); return; }
     const backup = {
-        version: 'V4.130',
+        version: 'V4.134',
         exportTime: new Date().toISOString(),
         users: selected,
         watchlist: watchlist,
